@@ -4,7 +4,22 @@ module.exports = {
   content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
   theme: {
-    extend: {},
+    extend: {
+         colors: {
+        kin: {
+          charcoal: "#1A1A1D",
+          midnight: "#2D3250",
+          amber: "#F6B17A",
+          mist: "#7077A1",
+          white: "#FFFFFF",
+        }
+      },
+      fontFamily: {
+        outfit: ["Outfit_Regular"],
+        "outfit-medium": ["Outfit_Medium"],
+        "outfit-bold": ["Outfit_Bold"],
+      },
+    },
   },
   plugins: [],
 }

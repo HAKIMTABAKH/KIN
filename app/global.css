@@ -1,3 +1,132 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* =========================================
+   UTILITIES (Layout Helpers)
+   ========================================= */
+@layer utilities {
+    .flex-center {
+        @apply flex items-center justify-center;
+    }
+
+    .flex-between {
+        @apply flex items-center justify-between;
+    }
+
+    .flex-start {
+        @apply flex items-start justify-center;
+    }
+
+    /* Used for the "Glass" effect overlay */
+    .glass-overlay {
+        @apply bg-kin-midnight/80;
+    }
+}
+
+/* =========================================
+   COMPONENTS (The KIN Design System)
+   ========================================= */
+@layer components {
+
+    /* --- CONTAINERS & CARDS --- */
+    
+    /* The main screen background */
+    .kin-container {
+        @apply flex-1 bg-kin-charcoal px-6;
+    }
+
+    /* The "Memory Wall" card */
+    .memory-card {
+        @apply w-full bg-kin-midnight rounded-3xl p-5 mb-4 shadow-lg shadow-black/20;
+    }
+
+    /* A clean row for lists (like contacts) */
+    .list-item {
+        @apply flex flex-row items-center justify-between py-4 border-b border-kin-midnight/50;
+    }
+
+    /* --- TYPOGRAPHY (Outfit Font) --- */
+
+    .h1-bold {
+        @apply text-4xl font-outfit-bold text-kin-white tracking-tight;
+    }
+
+    .h2-bold {
+        @apply text-2xl font-outfit-bold text-kin-white;
+    }
+
+    .h3-medium {
+        @apply text-xl font-outfit-medium text-kin-mist;
+    }
+
+    .body-regular {
+        @apply text-base font-outfit text-kin-white leading-relaxed;
+    }
+
+    .caption {
+        @apply text-sm font-outfit text-kin-mist;
+    }
+
+    /* --- BUTTONS & INTERACTIVE --- */
+
+    /* Main Action (e.g., "Post Memory", "Send") */
+    .btn-primary {
+        @apply flex-center h-14 w-full bg-kin-amber rounded-2xl active:opacity-90 shadow-md shadow-kin-amber/20;
+    }
+
+    .btn-primary-text {
+        @apply text-lg font-outfit-bold text-kin-charcoal;
+    }
+
+    /* Secondary Action (e.g., "Cancel", "Settings") */
+    .btn-secondary {
+        @apply flex-center h-14 w-full bg-kin-midnight rounded-2xl border border-kin-mist/20 active:bg-kin-midnight/80;
+    }
+
+    .btn-secondary-text {
+        @apply text-lg font-outfit-medium text-kin-white;
+    }
+
+    /* Floating Action Button (for the + button) */
+    .fab {
+        @apply absolute bottom-8 right-6 size-16 bg-kin-amber rounded-full flex-center shadow-xl shadow-black/30;
+    }
+
+    /* --- FORMS & INPUTS --- */
+
+    /* The text input field (Chat box, Login) */
+    .kin-input {
+        @apply w-full h-14 bg-kin-midnight rounded-2xl px-5 text-base font-outfit text-kin-white placeholder:text-kin-mist border border-transparent focus:border-kin-amber;
+    }
+
+    /* --- CHAT BUBBLES --- */
+
+    /* Message sent by ME */
+    .bubble-me {
+        @apply bg-kin-amber rounded-tr-sm rounded-2xl px-4 py-3 self-end max-w-[80%] mb-2 shadow-sm;
+    }
+    
+    .text-me {
+        @apply text-kin-charcoal font-outfit-medium text-base;
+    }
+
+    /* Message received from FRIEND */
+    .bubble-friend {
+        @apply bg-kin-midnight rounded-tl-sm rounded-2xl px-4 py-3 self-start max-w-[80%] mb-2;
+    }
+
+    .text-friend {
+        @apply text-kin-white font-outfit text-base;
+    }
+
+    /* --- AVATARS --- */
+
+    .avatar-lg {
+        @apply size-24 rounded-full border-2 border-kin-midnight overflow-hidden bg-kin-midnight;
+    }
+
+    .avatar-sm {
+        @apply size-10 rounded-full bg-kin-mist overflow-hidden;
+    }
+}

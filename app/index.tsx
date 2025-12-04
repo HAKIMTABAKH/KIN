@@ -1,12 +1,12 @@
-import { Text, View } from "react-native";
-import "./global.css";
- 
-export default function App() {
-  return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-xl font-bold text-blue-500">
-        Welcome to Kin!
-      </Text>
-    </View>
-  );
+import { Redirect } from "expo-router";
+
+export default function Index() {
+  // TODO: Add authentication check here
+  // const isAuthenticated = false;
+  
+  // if (!isAuthenticated) {
+  //   return <Redirect href="/(auth)/sign-in" />;
+  // }
+  
+  return <Redirect href="/tabs/Feed" />;
 }
