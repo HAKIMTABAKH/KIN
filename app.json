@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "KIN",
-    "slug": "KIN",
+    "slug": "kin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -23,7 +23,9 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+
     },
     "plugins": [
       "expo-router",
@@ -43,6 +45,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "51deebc7-f8bd-4ba3-b67b-35e81427bbd1"
+      }
+    },
+    "owner": "hakimtabakh"
   }
 }
