@@ -1,5 +1,5 @@
 import { Outfit_400Regular, Outfit_500Medium, Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
-import { Slot, SplashScreen } from "expo-router";
+import { SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
 import "./global.css";
 
@@ -27,5 +27,19 @@ export default function RootLayout() {
     return null;
   }
 
-  return <Slot />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen 
+        name="chat/[id]" 
+        options={{
+          headerShown: true,
+          headerTitle: "Chat",
+          presentation: "card"
+        }}
+      />
+    </Stack>
+  );
 }
