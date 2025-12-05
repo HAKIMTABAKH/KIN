@@ -3,7 +3,7 @@ import { ArrowRight, Lock, Mail } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { cleanOAuthUrl, configureGoogleSignIn, getCurrentSession, isOAuthCallback, signInWithEmail, signInWithGoogle } from '../../lib/auth';
+import { cleanOAuthUrl, configureGoogleSignIn, getCurrentSession, isGoogleSignInAvailable, isOAuthCallback, signInWithEmail, signInWithGoogle } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 
 export default function SignIn() {
@@ -11,6 +11,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const isWeb = Platform.OS === 'web';
+  const showGoogleButton = isWeb || isGoogleSignInAvailable();
 
   // Configure Google Sign-In on mount
   useEffect(() => {
@@ -62,8 +63,12 @@ export default function SignIn() {
     const { error } = await signInWithGoogle();
     
     if (error) {
-      // Don't show alert for user cancellation
-      if (error.code !== 'cancelled') {
+      if (error.code === 'not_available') {
+        Alert.alert(
+          'Not Available in Expo Go',
+          'Google Sign-In requires a development build. Please use email sign-in or build the app with EAS.'
+        );
+      } else if (error.code !== 'cancelled') {
         Alert.alert('Google Sign-In Error', error.message);
       }
       setLoading(false);
@@ -102,20 +107,24 @@ export default function SignIn() {
 
       <View className="w-full">
         
-        {/* Google Button - Available on all platforms */}
-        <TouchableOpacity 
-          onPress={handleGoogleSignIn}
-          disabled={loading}
-          className={`flex-row items-center justify-center bg-kin-white h-14 rounded-2xl mb-4 ${loading ? 'opacity-50' : ''}`}
-        >
-          <Text className="text-kin-charcoal font-outfit-bold text-lg">Continue with Google</Text>
-        </TouchableOpacity>
+        {/* Google Button - Only show if available */}
+        {showGoogleButton && (
+          <>
+            <TouchableOpacity 
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+              className={`flex-row items-center justify-center bg-kin-white h-14 rounded-2xl mb-4 ${loading ? 'opacity-50' : ''}`}
+            >
+              <Text className="text-kin-charcoal font-outfit-bold text-lg">Continue with Google</Text>
+            </TouchableOpacity>
 
-        <View className="flex-row items-center my-4">
-          <View className="flex-1 h-[1px] bg-kin-mist/30" />
-          <Text className="mx-4 text-kin-mist font-outfit">OR</Text>
-          <View className="flex-1 h-[1px] bg-kin-mist/30" />
-        </View>
+            <View className="flex-row items-center my-4">
+              <View className="flex-1 h-[1px] bg-kin-mist/30" />
+              <Text className="mx-4 text-kin-mist font-outfit">OR</Text>
+              <View className="flex-1 h-[1px] bg-kin-mist/30" />
+            </View>
+          </>
+        )}
 
         {/* Email Inputs */}
         <View className="flex-row items-center bg-kin-midnight rounded-2xl px-4 h-16 mb-4 border border-kin-slate">

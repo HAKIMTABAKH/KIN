@@ -1,13 +1,31 @@
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const isWeb = Platform.OS === 'web';
 
+// Lazy load Google Sign-In only when available (not in Expo Go)
+let GoogleSignin: any = null;
+let statusCodes: any = null;
+
+try {
+  if (!isWeb) {
+    const googleSignInModule = require('@react-native-google-signin/google-signin');
+    GoogleSignin = googleSignInModule.GoogleSignin;
+    statusCodes = googleSignInModule.statusCodes;
+  }
+} catch (error) {
+  console.log('Google Sign-In not available (Expo Go or module not installed)');
+}
+
+// Check if Google Sign-In is available
+export function isGoogleSignInAvailable() {
+  return !isWeb && GoogleSignin !== null;
+}
+
 // Configure Google Sign-In for native platforms
 export function configureGoogleSignIn() {
-  if (isWeb) return;
+  if (isWeb || !GoogleSignin) return;
 
   const webClientId =
     Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
@@ -18,10 +36,14 @@ export function configureGoogleSignIn() {
     return;
   }
 
-  GoogleSignin.configure({
-    scopes: ['https://www.googleapis.com/auth/userinfo.profile'],
-    webClientId: webClientId,
-  });
+  try {
+    GoogleSignin.configure({
+      scopes: ['https://www.googleapis.com/auth/userinfo.profile'],
+      webClientId: webClientId,
+    });
+  } catch (error) {
+    console.error('Error configuring Google Sign-In:', error);
+  }
 }
 
 // Sign in with email and password
@@ -60,6 +82,17 @@ export async function signInWithGoogle() {
 
     return { data, error };
   } else {
+    // Native: Check if Google Sign-In is available
+    if (!GoogleSignin) {
+      return { 
+        data: null, 
+        error: { 
+          message: 'Google Sign-In is not available. Please use a development build or email sign-in.', 
+          code: 'not_available' 
+        } 
+      };
+    }
+
     // Native: Use Google Sign-In SDK
     try {
       await GoogleSignin.hasPlayServices();
@@ -78,11 +111,11 @@ export async function signInWithGoogle() {
       return { data, error };
     } catch (error: any) {
       // Handle Google Sign-In specific errors
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+      if (statusCodes && error.code === statusCodes.SIGN_IN_CANCELLED) {
         return { data: null, error: { message: 'Sign-in cancelled', code: 'cancelled' } };
-      } else if (error.code === statusCodes.IN_PROGRESS) {
+      } else if (statusCodes && error.code === statusCodes.IN_PROGRESS) {
         return { data: null, error: { message: 'Sign-in already in progress', code: 'in_progress' } };
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      } else if (statusCodes && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         return { data: null, error: { message: 'Play Services not available', code: 'play_services' } };
       }
       return { data: null, error };
@@ -94,8 +127,8 @@ export async function signInWithGoogle() {
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   
-  // Also sign out from Google on native
-  if (!isWeb) {
+  // Also sign out from Google on native if available
+  if (!isWeb && GoogleSignin) {
     try {
       await GoogleSignin.signOut();
     } catch (error) {

@@ -1,18 +1,23 @@
 import { cleanOAuthUrl, getCurrentSession, isOAuthCallback } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { hasSeenWelcome } from "@/lib/utils";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 export default function Index() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [hasSeenWelcomeScreen, setHasSeenWelcomeScreen] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   
   useEffect(() => {
     let mounted = true;
 
-    // Check current session
-    const checkSession = async () => {
+    // Check welcome status and session
+    const checkInitialState = async () => {
+      // Check if user has seen welcome screen
+      const seenWelcome = await hasSeenWelcome();
+      
       // Give Supabase time to process OAuth callback if present
       if (isOAuthCallback()) {
         console.log('Index - OAuth callback detected, waiting...');
@@ -22,11 +27,13 @@ export default function Index() {
       const { session, error } = await getCurrentSession();
       console.log('Index - Session check:', {
         hasSession: !!session,
+        seenWelcome,
         error: error,
         sessionDetails: session ? { user: session.user.email, expiresAt: session.expires_at } : null
       });
       
       if (mounted) {
+        setHasSeenWelcomeScreen(seenWelcome);
         setIsAuthenticated(!!session);
         setIsChecking(false);
         
@@ -37,7 +44,7 @@ export default function Index() {
       }
     };
 
-    checkSession();
+    checkInitialState();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -63,8 +70,8 @@ export default function Index() {
     };
   }, []);
 
-  // Show loading while checking auth
-  if (isChecking || isAuthenticated === null) {
+  // Show loading while checking
+  if (isChecking || isAuthenticated === null || hasSeenWelcomeScreen === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1C1C1E' }}>
         <ActivityIndicator size="large" color="#F5A623" />
@@ -72,9 +79,16 @@ export default function Index() {
     );
   }
   
+  // Show welcome screen on first launch (only if not authenticated)
+  if (!hasSeenWelcomeScreen && !isAuthenticated) {
+    return <Redirect href="/welcome" />;
+  }
+  
+  // Show sign-in if not authenticated
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/sign-in" />;
   }
   
+  // Show main app if authenticated
   return <Redirect href="/(tabs)/Feed" />;
 }
