@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import KinInput from '../../components/KinInput';
-import { cleanOAuthUrl, configureGoogleSignIn, getCurrentSession, isGoogleSignInAvailable, isOAuthCallback, signInWithEmail, signInWithGoogle } from '../../lib/auth';
+import { cleanOAuthUrl, configureGoogleSignIn, getCurrentSession, isGoogleSignInAvailable, isOAuthCallback, signInWithEmail, signInWithGoogle, updateProfileFromMetadata } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 
 interface FormErrors {
@@ -43,7 +43,13 @@ export default function SignIn() {
 
       const { session } = await getCurrentSession();
       if (session && mounted) {
-        console.log('Already authenticated, redirecting...');
+        console.log('Already authenticated, syncing profile and redirecting...');
+        
+        // Sync profile to ensure it's up to date
+        if (session.user) {
+          await updateProfileFromMetadata(session.user.id);
+        }
+        
         cleanOAuthUrl();
         router.replace('/(tabs)/Feed');
       }
@@ -52,11 +58,17 @@ export default function SignIn() {
     checkAuth();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
       
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && mounted) {
-        console.log('Sign in detected, redirecting...');
+        console.log('Sign in detected, updating profile and redirecting...');
+        
+        // Update profile from OAuth metadata if available
+        if (session.user) {
+          await updateProfileFromMetadata(session.user.id);
+        }
+        
         cleanOAuthUrl();
         router.replace('/(tabs)/Feed');
       }

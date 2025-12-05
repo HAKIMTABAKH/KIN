@@ -1,8 +1,14 @@
 import { Tabs } from 'expo-router';
-import { View } from 'react-native';
 import { Home, MessageCircle, User } from 'lucide-react-native';
+import { useEffect } from 'react';
+import { syncCurrentUserProfile } from '../../lib/auth';
 
 export default function TabsLayout() {
+  // Automatically sync profile when app loads
+  useEffect(() => {
+    syncCurrentUserProfile();
+  }, []);
+
   return (
     <Tabs
       screenOptions={{

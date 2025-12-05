@@ -61,7 +61,7 @@ export default function SignUp() {
 
     setLoading(true);
     
-    const { error } = await signUpWithEmail(email, password);
+    const { error } = await signUpWithEmail(email, password, fullName);
 
     if (error) {
       // Map Supabase errors to the correct field
@@ -75,7 +75,7 @@ export default function SignUp() {
       setLoading(false);
     } else {
       setLoading(false);
-      router.replace('/(auth)/sign-in');
+      router.replace('/(tabs)/Feed');
     }
   }
 

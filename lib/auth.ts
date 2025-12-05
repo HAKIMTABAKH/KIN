@@ -57,11 +57,28 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 // Sign up with email and password
-export async function signUpWithEmail(email: string, password: string) {
+export async function signUpWithEmail(email: string, password: string, fullName?: string) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
   });
+
+  // If sign up successful and full name provided, upsert profile
+  if (data.user && fullName && !error) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({ 
+        id: data.user.id,
+        full_name: fullName,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id'
+      });
+
+    if (profileError) {
+      console.error('Error upserting profile with full name:', profileError);
+    }
+  }
 
   return { data, error };
 }
@@ -107,6 +124,29 @@ export async function signInWithGoogle() {
         provider: 'google',
         token: idToken,
       });
+
+      // Save Google user's full name to profile if available
+      if (data.user && userInfo.data?.user) {
+        const googleFullName = userInfo.data.user.name;
+        const googleEmail = userInfo.data.user.email;
+        
+        if (googleFullName) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({ 
+              id: data.user.id,
+              full_name: googleFullName,
+              email: googleEmail,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'id'
+            });
+
+          if (profileError) {
+            console.error('Error upserting profile with Google name:', profileError);
+          }
+        }
+      }
 
       return { data, error };
     } catch (error: any) {
@@ -161,4 +201,58 @@ export function cleanOAuthUrl() {
 // Check if URL contains OAuth callback
 export function isOAuthCallback() {
   return isWeb && window.location.hash.includes('access_token');
+}
+
+// Update profile with user metadata (useful for OAuth providers)
+export async function updateProfileFromMetadata(userId: string) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      console.log('User metadata:', user.user_metadata);
+      console.log('User identities:', user.identities);
+      
+      // Try multiple possible fields for full name
+      const fullName = 
+        user.user_metadata?.full_name || 
+        user.user_metadata?.name || 
+        user.user_metadata?.display_name ||
+        user.identities?.[0]?.identity_data?.full_name ||
+        user.identities?.[0]?.identity_data?.name;
+      
+      const email = user.email;
+      
+      console.log('Extracted full name:', fullName);
+      console.log('Extracted email:', email);
+      
+      if (fullName || email) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({ 
+            id: userId,
+            full_name: fullName,
+            email: email,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'id'
+          });
+
+        if (profileError) {
+          console.error('Error upserting profile from metadata:', profileError);
+        } else {
+          console.log('Profile updated successfully with full name:', fullName);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error updating profile from metadata:', error);
+  }
+}
+
+// Sync current user's profile (useful for fixing existing users)
+export async function syncCurrentUserProfile() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await updateProfileFromMetadata(user.id);
+  }
 }
