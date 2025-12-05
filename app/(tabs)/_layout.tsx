@@ -1,39 +1,46 @@
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
 import { Home, MessageCircle, User } from 'lucide-react-native';
-import React from 'react';
 
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#4A90E2',
-        tabBarInactiveTintColor: '#8E8E93',
-        tabBarStyle: {
-          backgroundColor: '#1C1C1E',
-          borderTopColor: '#38383A',
-        },
         headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#1A1A1D', // kin-charcoal
+          borderTopColor: '#2D3250',  // kin-midnight (subtle border)
+          height: 65,
+          paddingBottom: 10,
+          paddingTop: 10,
+        },
+        tabBarActiveTintColor: '#F6B17A', // kin-amber
+        tabBarInactiveTintColor: '#7077A1', // kin-mist
+        tabBarShowLabel: false, 
+
       }}
     >
+      {/* 1. Feed Tab */}
       <Tabs.Screen
         name="Feed"
         options={{
-          title: 'Feed',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Home color={color} size={28} />,
         }}
       />
-        <Tabs.Screen
-          name="chats"
-          options={{
-            title: 'Chats',
-            tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
-          }}
-        />
+
+      {/* 2. Chats Tab (Note: using the folder 'chats') */}
+      <Tabs.Screen
+        name="chats"
+        options={{
+          tabBarIcon: ({ color }) => <MessageCircle color={color} size={28} />,
+        }}
+      />
+
+      {/* 3. Profile Tab */}
       <Tabs.Screen
         name="Profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+          tabBarIcon: ({ color }) => <User color={color} size={28} />,
         }}
       />
     </Tabs>
