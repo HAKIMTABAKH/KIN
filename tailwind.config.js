@@ -12,6 +12,7 @@ module.exports = {
           amber: "#F6B17A",
           mist: "#7077A1",
           white: "#FFFFFF",
+          slate: '#1F222B',  
         }
       },
       fontFamily: {

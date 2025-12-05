@@ -1,15 +1,27 @@
 import { Link, router } from 'expo-router';
-import { ArrowRight, Lock, Mail } from 'lucide-react-native';
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import KinInput from '../../components/KinInput';
 import { cleanOAuthUrl, configureGoogleSignIn, getCurrentSession, isGoogleSignInAvailable, isOAuthCallback, signInWithEmail, signInWithGoogle } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
+
+interface FormErrors {
+  email?: string;
+  password?: string;
+}
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  const togglePasswordVisibility = () => {
+    setIsPasswordVisible(!isPasswordVisible);
+  };
   const isWeb = Platform.OS === 'web';
   const showGoogleButton = isWeb || isGoogleSignInAvailable();
 
@@ -79,102 +91,132 @@ export default function SignIn() {
     // On web, OAuth will redirect automatically
   }
 
+  // Validation Function
+  const validate = () => {
+    const newErrors: FormErrors = {};
+    
+    if (!email.trim()) newErrors.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = "Email is invalid";
+    if (!password) newErrors.password = "Password is required";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   // Handle Email Sign-In
   async function handleEmailSignIn() {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
-      return;
-    }
+    if (!validate()) return;
 
     setLoading(true);
     const { error } = await signInWithEmail(email, password);
     
     if (error) {
-      Alert.alert('Error', error.message);
+      setErrors({ email: error.message });
       setLoading(false);
     } else {
       router.replace('/(tabs)/Feed');
     }
   }
 
+  // Helper to clear error when user types
+  const handleInputChange = (field: keyof FormErrors, value: string, setter: (value: string) => void) => {
+    setter(value);
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: undefined });
+    }
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-kin-charcoal items-center justify-center p-6">
-      
-      <View className="mb-10 w-full">
-        <Text className="text-kin-amber text-4xl font-outfit-bold mb-2">Welcome Back.</Text>
-        <Text className="text-kin-white text-xl font-outfit-medium">Enter your digital living room.</Text>
-      </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1 bg-kin-charcoal"
+    >
+      {/* 2. SCROLLVIEW: Ensures the inputs scroll up when keyboard opens */}
+      <ScrollView 
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* 3. SAFE AREA: Handles the notch/padding inside the scroll */}
+        <SafeAreaView className="flex-1 items-center justify-center p-7 gap-6">
+          
+          {/* Header */}
+          <View className="mb-10 w-full">
+            <Text className="text-kin-amber text-4xl font-outfit-bold mb-2">Welcome Back.</Text>
+            <Text className="text-kin-white text-xl font-outfit-medium">Enter your digital living room.</Text>
+          </View>
 
-      <View className="w-full">
-        
-        {/* Google Button - Only show if available */}
-        {showGoogleButton && (
-          <>
+          <View className="w-full">
+            
+            {/* Google Button (Optional) */}
+            {showGoogleButton && (
+              <>
+                <TouchableOpacity 
+                  onPress={handleGoogleSignIn}
+                  disabled={loading}
+                  className={`flex-row items-center justify-center bg-kin-white h-14 rounded-2xl mb-4 ${loading ? 'opacity-50' : ''}`}
+                >
+                  <Text className="text-kin-charcoal font-outfit-bold text-lg">Continue with Google</Text>
+                </TouchableOpacity>
+
+                <View className="flex-row items-center my-4">
+                  <View className="flex-1 h-[1px] bg-kin-mist/30" />
+                  <Text className="mx-4 text-kin-mist font-outfit">OR</Text>
+                  <View className="flex-1 h-[1px] bg-kin-mist/30" />
+                </View>
+              </>
+            )}
+
+            <KinInput
+              icon={Mail}
+              placeholder="Email Address"
+              value={email}
+              onChangeText={(text) => handleInputChange('email', text, setEmail)}
+              error={errors.email}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <KinInput
+              icon={Lock}
+              placeholder="Password"
+              value={password}
+              onChangeText={(text) => handleInputChange('password', text, setPassword)}
+              error={errors.password}
+              secureTextEntry={!isPasswordVisible}
+              rightIcon={isPasswordVisible ? Eye : EyeOff}
+              onRightIconPress={togglePasswordVisibility}
+            />
+
+            {/* Sign In Button */}
             <TouchableOpacity 
-              onPress={handleGoogleSignIn}
-              disabled={loading}
-              className={`flex-row items-center justify-center bg-kin-white h-14 rounded-2xl mb-4 ${loading ? 'opacity-50' : ''}`}
-            >
-              <Text className="text-kin-charcoal font-outfit-bold text-lg">Continue with Google</Text>
-            </TouchableOpacity>
+  onPress={handleEmailSignIn}
+  disabled={loading}
+  // 1. Change background to Amber (High Visibility)
+  // 2. Add 'mt-2' to give it a little breathing room from the inputs
+  className={`bg-kin-amber h-14 rounded-2xl flex-row justify-center items-center px-6 mt-2 ${loading ? 'opacity-50' : ''}`}
+>
+  {/* 3. Change text to Dark (Black/Charcoal) so it's readable on Amber */}
+  <Text className="text-black font-outfit-bold text-lg mr-2">
+    {loading ? "Signing in..." : "Sign in with Email"}
+  </Text>
+  
+  {/* 4. Change arrow to Black to match text */}
+  {!loading && <ArrowRight color="#000000" size={24} />}
+</TouchableOpacity>
+          </View>
 
-            <View className="flex-row items-center my-4">
-              <View className="flex-1 h-[1px] bg-kin-mist/30" />
-              <Text className="mx-4 text-kin-mist font-outfit">OR</Text>
-              <View className="flex-1 h-[1px] bg-kin-mist/30" />
-            </View>
-          </>
-        )}
+          {/* Footer Link */}
+          <View className="flex-row justify-center mt-8">
+            <Text className="text-kin-mist font-outfit">Don't have a key? </Text>
+            <Link href="/(auth)/sign-up" asChild>
+              <TouchableOpacity>
+                <Text className="text-kin-amber font-outfit-bold">Create one</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
 
-        {/* Email Inputs */}
-        <View className="flex-row items-center bg-kin-midnight rounded-2xl px-4 h-16 mb-4 border border-kin-slate">
-          <Mail color="#7077A1" size={20} />
-          <TextInput 
-            className="flex-1 ml-3 font-outfit text-kin-white text-base"
-            placeholder="Email Address"
-            placeholderTextColor="#7077A1"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-        </View>
-
-        <View className="flex-row items-center bg-kin-midnight rounded-2xl px-4 h-16 mb-4 border border-kin-slate">
-          <Lock color="#7077A1" size={20} />
-          <TextInput 
-            className="flex-1 ml-3 font-outfit text-kin-white text-base"
-            placeholder="Password"
-            placeholderTextColor="#7077A1"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-        </View>
-
-        {/* Regular Sign In */}
-        <TouchableOpacity 
-          onPress={handleEmailSignIn}
-          disabled={loading}
-          className={`bg-kin-slate h-14 rounded-2xl flex-row justify-between items-center px-6 ${loading ? 'opacity-50' : ''}`}
-        >
-          <Text className="text-kin-mist font-outfit-bold text-base">
-            {loading ? "Signing in..." : "Sign in with Email"}
-          </Text>
-          {!loading && <ArrowRight color="#7077A1" size={24} />}
-        </TouchableOpacity>
-
-      </View>
-
-      <View className="flex-row justify-center mt-8">
-        <Text className="text-kin-mist font-outfit">Don't have a key? </Text>
-        <Link href="/(auth)/sign-up" asChild>
-          <TouchableOpacity>
-            <Text className="text-kin-amber font-outfit-bold">Create one</Text>
-          </TouchableOpacity>
-        </Link>
-      </View>
-
-    </SafeAreaView>
+        </SafeAreaView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
