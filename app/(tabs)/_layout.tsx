@@ -1,10 +1,9 @@
 import { Tabs } from 'expo-router';
-import { Home, MessageCircle, User } from 'lucide-react-native';
+import { Home, MessageSquare, User } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { syncCurrentUserProfile } from '../../lib/auth';
 
 export default function TabsLayout() {
-  // Automatically sync profile when app loads
   useEffect(() => {
     syncCurrentUserProfile();
   }, []);
@@ -14,14 +13,14 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#1A1A1D', // kin-charcoal
-          borderTopColor: '#2D3250',  // kin-midnight (subtle border)
+          backgroundColor: '#1A1A1D', 
+          borderTopColor: '#334155', 
           height: 65,
           paddingBottom: 10,
           paddingTop: 10,
         },
-        tabBarActiveTintColor: '#F6B17A', // kin-amber
-        tabBarInactiveTintColor: '#7077A1', // kin-mist
+        tabBarActiveTintColor: '#F6B17A', 
+        tabBarInactiveTintColor: '#7077A1', 
         tabBarShowLabel: false, 
 
       }}
@@ -38,7 +37,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chats"
         options={{
-          tabBarIcon: ({ color }) => <MessageCircle color={color} size={28} />,
+          tabBarIcon: ({ color }) => <MessageSquare  color={color} size={28} />,
         }}
       />
 
