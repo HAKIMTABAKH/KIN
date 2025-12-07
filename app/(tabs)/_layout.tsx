@@ -1,12 +1,53 @@
-import { Tabs } from 'expo-router';
+import { supabase } from '@/lib/supabase';
+import { Tabs, useRouter } from 'expo-router';
 import { Home, MessageSquare, User } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { syncCurrentUserProfile } from '../../lib/auth';
 
 export default function TabsLayout() {
+  const router = useRouter();
+  const [isChecking, setIsChecking] = useState(true);
+
   useEffect(() => {
-    syncCurrentUserProfile();
+    // Check authentication before rendering tabs
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.log('TabsLayout - No session, redirecting to sign-in');
+        router.replace('/(auth)/sign-in');
+      } else {
+        console.log('TabsLayout - Session found, syncing profile');
+        await syncCurrentUserProfile();
+      }
+      
+      setIsChecking(false);
+    };
+
+    checkAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('TabsLayout - Auth event:', event);
+      if (event === 'SIGNED_OUT') {
+        console.log('TabsLayout - Signed out, redirecting to sign-in');
+        router.replace('/(auth)/sign-in');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  if (isChecking) {
+    return (
+      <View className="flex-1 justify-center items-center bg-kin-charcoal">
+        <ActivityIndicator size="large" color="#F59E0B" />
+      </View>
+    );
+  }
 
   return (
     <Tabs

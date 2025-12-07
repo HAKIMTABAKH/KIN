@@ -52,6 +52,9 @@ export default function SignIn() {
         
         cleanOAuthUrl();
         router.replace('/(tabs)/Feed');
+      } else if (mounted) {
+        // No session, ensure loading is false
+        setLoading(false);
       }
     };
 
@@ -71,6 +74,10 @@ export default function SignIn() {
         
         cleanOAuthUrl();
         router.replace('/(tabs)/Feed');
+      } else if (event === 'SIGNED_OUT' && mounted) {
+        // Reset loading state on sign out
+        console.log('Sign out detected, resetting loading state');
+        setLoading(false);
       }
     });
 

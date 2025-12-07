@@ -1,17 +1,17 @@
 import MenuItem from '@/components/MenuItem';
 import { signOut } from '@/lib/auth';
 import { getProfileData, Profile } from '@/lib/profile';
-import { router } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import {
-  Bell,
-  CreditCard,
-  Edit3,
-  Globe,
-  HelpCircle,
-  LogOut,
-  Moon,
-  Shield,
-  User
+    Bell,
+    CreditCard,
+    Edit3,
+    Globe,
+    HelpCircle,
+    LogOut,
+    Moon,
+    Shield,
+    User
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -22,10 +22,24 @@ export default function ProfileScreen() {
   const [userEmail, setUserEmail] = useState('');
   const [memberSince, setMemberSince] = useState('');
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
     loadProfile();
+
+    // Listen for auth state changes to handle logout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Profile - Auth event:', event);
+      if (event === 'SIGNED_OUT') {
+        console.log('Profile - Signed out, navigating to sign-in');
+        router.replace('/(auth)/sign-in');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function loadProfile() {
@@ -38,14 +52,35 @@ export default function ProfileScreen() {
   }
 
   async function handleSignOut() {
-    await signOut();
-    router.replace('/(auth)/sign-in');
+    try {
+      setSigningOut(true);
+      const { error } = await signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+        setSigningOut(false);
+      }
+      // Don't manually navigate - index.tsx will handle the redirect
+      // after the auth state change is detected
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setSigningOut(false);
+    }
   }
 
   if (loading) {
     return (
       <View className="flex-1 bg-kin-charcoal justify-center items-center">
         <ActivityIndicator color="#F59E0B" size="large" />
+      </View>
+    );
+  }
+
+  // Show signing out overlay
+  if (signingOut) {
+    return (
+      <View className="flex-1 bg-kin-charcoal justify-center items-center">
+        <ActivityIndicator color="#F59E0B" size="large" />
+        <Text className="text-kin-white font-outfit-medium mt-4">Signing out...</Text>
       </View>
     );
   }

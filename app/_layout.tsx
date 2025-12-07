@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Outfit_400Regular, Outfit_500Medium, Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
 import { Session } from "@supabase/supabase-js";
-import { Redirect, SplashScreen, Stack } from "expo-router";
+import { SplashScreen, Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import "./global.css";
@@ -12,6 +12,10 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const segments = useSegments();
+  const router = useRouter();
+
   const [fontsLoaded] = useFonts({
     Outfit_Regular: Outfit_400Regular,
     Outfit_Medium: Outfit_500Medium,
@@ -25,14 +29,16 @@ export default function RootLayout() {
   }, [fontsLoaded]);
 
   useEffect(() => {
-    // 1. Check initial session
+    // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('_layout - Initial session:', !!session);
       setSession(session);
       setLoading(false);
     });
 
-    // 2. Listen for auth changes (Login/Logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Listen for auth changes (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('_layout auth event:', event, 'Has session:', !!session);
       setSession(session);
       setLoading(false);
     });
@@ -40,11 +46,35 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  // Route protection: redirect based on auth state and current location
+  useEffect(() => {
+    if (loading || !fontsLoaded) return;
 
-  if (loading) {
+    const inAuthGroup = segments[0] === '(auth)';
+    const inTabsGroup = segments[0] === '(tabs)';
+    const inChatRoute = segments[0] === 'chat';
+    const isProtectedRoute = inTabsGroup || inChatRoute;
+
+    console.log('_layout - Route protection check:', {
+      segments,
+      hasSession: !!session,
+      inAuthGroup,
+      isProtectedRoute
+    });
+
+    // If user is NOT authenticated and trying to access protected routes
+    if (!session && isProtectedRoute) {
+      console.log('_layout - Redirecting to sign-in (no session, protected route)');
+      router.replace('/(auth)/sign-in');
+    }
+    // If user IS authenticated and on auth pages, redirect to app
+    else if (session && inAuthGroup) {
+      console.log('_layout - Redirecting to Feed (has session, on auth page)');
+      router.replace('/(tabs)/Feed');
+    }
+  }, [session, segments, loading, fontsLoaded]);
+
+  if (!fontsLoaded || loading) {
     return (
       <View className="flex-1 justify-center items-center bg-kin-charcoal">
         <ActivityIndicator size="large" color="#F59E0B" />
@@ -52,15 +82,10 @@ export default function RootLayout() {
     );
   }
 
-
-  // 3. If no session, go to Login
-  if (!session) {
-    return <Redirect href="/(auth)/sign-in" />;
-  }
-
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="welcome" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen 

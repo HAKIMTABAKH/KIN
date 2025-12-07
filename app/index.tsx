@@ -61,6 +61,13 @@ export default function Index() {
         if (session) {
           cleanOAuthUrl();
         }
+        
+        // On sign out, ensure we're not stuck in checking state
+        if (event === 'SIGNED_OUT') {
+          console.log('Index - Sign out detected, clearing auth state');
+          setIsAuthenticated(false);
+          setIsChecking(false);
+        }
       }
     });
 
