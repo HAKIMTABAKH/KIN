@@ -1,50 +1,151 @@
-# Welcome to your Expo app 👋
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+# KIN: Your Digital Living Room
 
-## Get started
+<p align="center">
+  <img src="https://fra.cloud.appwrite.io/v1/storage/buckets/6912847200215b418d6d/files/6936030b0018676b0edd/view?project=69127eb7001c1e85b1aa" alt="KIN Logo" width="200"/>
+</p>
 
-1. Install dependencies
+<p align="center">
+  <strong>Hyper-Private Social Connections</strong>
+  <br />
+  <em>No ads. No noise. Just memories.</em>
+</p>
 
-   ```bash
-   npm install
-   ```
+KIN is a modern, mobile-first social application designed for creating intimate digital spaces with close friends. It replaces the noise of mainstream social media with a focused, real-time chat and a shared "Memory Wall" for your inner circle.
 
-2. Start the app
+Built with performance and privacy in mind, KIN provides a seamless and beautiful experience for fostering deep connections.
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## ✨ Key Features
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+-   **🔒 Hyper-Private Spaces:** Create private groups ("Circles") for your closest friends. No algorithms, no ads.
+-   **💬 Real-Time Chat:** A powerful, modern chat interface with support for text, images, and reactions. Built on Supabase for instant message delivery.
+-   **📸 Shared Memory Wall:** A visual timeline for your Circle to share and relive memories together.
+-   **🤝 Smart Social Hub:** A single, elegant screen to manage friend requests, discover new connections, and view your circle.
+-   **🔔 Thoughtful Notifications:** A clean, contextual notification system that keeps you updated without being overwhelming.
+-   **🎨 Modern UI/UX:** A stunning, dark-themed interface built with React Native and NativeWind, inspired by the best modern apps.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## 🛠 Tech Stack
 
-When you're ready, run:
+KIN is built with a modern, powerful, and scalable stack.
+
+-   **Frontend:** [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/)
+-   **Navigation:** [Expo Router](https://docs.expo.dev/router/) for file-based routing
+-   **Styling:** [NativeWind (Tailwind CSS)](https://www.nativewind.dev/) for rapid, consistent UI development
+-   **Backend:** [Supabase](https://supabase.com/) for Authentication, Real-time Database, and Storage
+-   **State Management:** [TanStack Query (React Query)](https://tanstack.com/query/latest) for powerful server state management and caching
+-   **Forms:** [React Hook Form](https://react-hook-form.com/) with [Zod](https://zod.dev/) for robust, validated forms
+-   **Icons:** [Lucide React Native](https://lucide.dev/) for beautiful, consistent icons
+
+---
+
+## 🚀 Getting Started
+
+To get a local copy of KIN up and running, follow these steps.
+
+### Prerequisites
+
+-   [Node.js](https://nodejs.org/) (v18 or newer)
+-   [Bun](https://bun.sh/) (recommended package manager) or `npm`
+-   Physical iOS/Android device or an emulator/simulator for testing.
+
+### 1. Clone and Install Dependencies
 
 ```bash
-npm run reset-project
+# Clone the repository
+git clone https://github.com/your-username/kin.git
+cd kin
+
+# Install dependencies
+bun install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Set Up Supabase
 
-## Learn more
+1.  Create a new project at [supabase.com](https://supabase.com).
+2.  Run the provided SQL schema in the Supabase SQL editor to set up your database tables (`profiles`, `friendships`, `messages`, etc.).
+3.  Find your API URL and `anon` key in Supabase Settings > API.
+4.  Create a `.env.local` file in the root of the project and add your keys:
 
-To learn more about developing your project with Expo, look at the following resources:
+    ```env
+    EXPO_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
+    EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+    ```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 3. Start the Development Server
 
-## Join the community
+```bash
+bun start
+```
 
-Join our community of developers creating universal apps.
+This will start the Metro bundler and open the Expo development server in your browser. You can now run the app on:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+-   **Physical Device:** Download the [Expo Go](https://expo.dev/go) app and scan the QR code.
+-   **Simulator/Emulator:** Press `i` to open the iOS Simulator or `a` to open an Android Emulator.
+
+---
+
+## 📱 Project Structure
+
+The project uses a file-based routing system, making navigation intuitive.
+
+```
+KIN/
+├── app/                  # Main application screens & routing
+│   ├── (auth)/           # Authentication screens (sign-in, sign-up)
+│   ├── (tabs)/           # Bottom tab navigation screens
+│   │   ├── feed.jsx
+│   │   ├── social-hub.jsx
+│   │   └── profile.jsx
+│   ├── [chatRoom].jsx     # Dynamic chat room screen
+│   └── _layout.tsx        # Root layout and providers
+├── components/            # Reusable UI components
+│   ├── CustomInput.jsx
+│   ├── MessageMenu.jsx
+│   └── ProfileTabIcon.tsx
+├── constants/             # App-wide constants (colors, images, etc.)
+├── context/               # React Context for global state
+│   └── UserContext.tsx
+├── lib/                  # Utility functions (supabase client, auth, etc.)
+├── types/                 # TypeScript type definitions
+└── assets/               # Static assets (images, fonts)
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! If you'd like to help improve KIN, please:
+
+1.  Fork the repository.
+2.  Create a new branch for your feature (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 📧 Contact
+
+Your Name - [@your-twitter](https://twitter.com/your-twitter) - your.email@email.com
+
+Project Link: [https://github.com/your-username/kin](https://github.com/your-username/kin)
+```
+
+### Why this README is better for your project:
+
+*   **It tells a story:** It immediately establishes the "why" behind KIN.
+*   **Highlights Features:** Users and developers can see the core functionality at a glance.
+*   **Details the Tech Stack:** This is incredibly useful for other developers and shows you're using modern tools.
+*   **Provides Clear Instructions:** The setup steps are specific to your app's needs (e.g., Supabase configuration).
+*   **Shows Project Structure:** This helps new contributors understand the codebase quickly.
+*   **Looks Professional:** The use of badges, emojis, and clear sections makes it easy and pleasant to read.
