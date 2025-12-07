@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { Link } from "expo-router";
 import { MessageSquarePlus, Search } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatsListScreen() {
@@ -15,18 +15,90 @@ export default function ChatsListScreen() {
   }, []);
 
   async function fetchRooms() {
-    // 1. Fetch rooms that exist
-    const { data, error } = await supabase
-      .from('rooms')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      console.error(error);
-    } else {
-      setRooms(data || []);
+      // Fetch rooms where the current user is a member
+      const { data: userRooms, error: roomsError } = await supabase
+        .from('user_rooms')
+        .select('room_id')
+        .eq('user_id', user.id);
+
+      if (roomsError) {
+        console.error('Error fetching user rooms:', roomsError);
+        setLoading(false);
+        return;
+      }
+
+      if (!userRooms || userRooms.length === 0) {
+        setRooms([]);
+        setLoading(false);
+        return;
+      }
+
+      const roomIds = userRooms.map(ur => ur.room_id);
+
+      // Fetch room details
+      const { data: roomsData, error: roomDetailsError } = await supabase
+        .from('rooms')
+        .select('*')
+        .in('id', roomIds)
+        .order('created_at', { ascending: false });
+
+      if (roomDetailsError) {
+        console.error('Error fetching rooms:', roomDetailsError);
+        setLoading(false);
+        return;
+      }
+
+      // For each room, get the other user's info
+      const roomsWithUsers = await Promise.all(
+        (roomsData || []).map(async (room) => {
+          // Get all users in this room
+          const { data: roomMembers } = await supabase
+            .from('user_rooms')
+            .select('user_id')
+            .eq('room_id', room.id);
+
+          // Find the other user (not current user)
+          const otherUserId = roomMembers?.find(m => m.user_id !== user.id)?.user_id;
+
+          if (otherUserId) {
+            // Fetch other user's profile
+            const { data: otherUserProfile } = await supabase
+              .from('profiles')
+              .select('full_name, avatar_url')
+              .eq('id', otherUserId)
+              .single();
+
+            return {
+              ...room,
+              displayName: otherUserProfile?.full_name || 'Unknown User',
+              otherUserAvatar: otherUserProfile?.avatar_url,
+              otherUserId: otherUserId
+            };
+          }
+
+          return {
+            ...room,
+            displayName: room.name || 'Chat',
+            otherUserAvatar: null,
+            otherUserId: null
+          };
+        })
+      );
+
+      setRooms(roomsWithUsers);
+    } catch (error) {
+      console.error('Error in fetchRooms:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function createTestRoom() {
@@ -38,13 +110,17 @@ export default function ChatsListScreen() {
   const renderItem = ({ item }: { item: any }) => (
     <Link href={`/chat/${item.id}`} asChild>
       <TouchableOpacity className="flex-row items-center p-4 border-b border-kin-slate/20 active:bg-kin-slate/10">
-        <View className="h-14 w-14 rounded-full bg-kin-slate items-center justify-center mr-4">
-          <Text className="text-kin-white font-outfit-bold text-xl">
-            {item.name ? item.name[0] : '#'}
-          </Text>
+        <View className="h-14 w-14 rounded-full bg-kin-slate items-center justify-center mr-4 overflow-hidden">
+          {item.otherUserAvatar ? (
+            <Image source={{ uri: item.otherUserAvatar }} className="h-full w-full" />
+          ) : (
+            <Text className="text-kin-white font-outfit-bold text-xl">
+              {item.displayName ? item.displayName[0].toUpperCase() : '#'}
+            </Text>
+          )}
         </View>
         <View className="flex-1">
-          <Text className="text-kin-white font-outfit-bold text-lg">{item.name}</Text>
+          <Text className="text-kin-white font-outfit-bold text-lg">{item.displayName}</Text>
           <Text className="text-kin-mist font-outfit text-sm">Tap to chat</Text>
         </View>
       </TouchableOpacity>

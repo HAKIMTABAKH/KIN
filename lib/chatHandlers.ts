@@ -34,7 +34,32 @@ export const setupRoom = async (
 
   // Get room details
   const { data: roomData } = await getRoomDetails(roomId);
-  if (roomData) setRoomName(roomData.name || 'Chat');
+  
+  // Get other user in the room to display their name
+  const { data: roomMembers } = await supabase
+    .from('user_rooms')
+    .select('user_id')
+    .eq('room_id', roomId);
+
+  // Find the other user (not current user)
+  const otherUserId = roomMembers?.find(m => m.user_id !== user.id)?.user_id;
+
+  if (otherUserId) {
+    // Fetch other user's profile
+    const { data: otherUserProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', otherUserId)
+      .single();
+
+    if (otherUserProfile?.full_name) {
+      setRoomName(otherUserProfile.full_name);
+    } else {
+      setRoomName(roomData?.name || 'Chat');
+    }
+  } else {
+    setRoomName(roomData?.name || 'Chat');
+  }
 
   // Load initial messages
   const { data: messagesData } = await fetchMessages(roomId);
