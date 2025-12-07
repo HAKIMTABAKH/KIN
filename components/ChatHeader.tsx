@@ -1,12 +1,7 @@
+import { ChatHeaderProps } from '@/types';
 import { ArrowLeft, Phone, Video } from 'lucide-react-native';
 import { Text, TouchableOpacity, View } from 'react-native';
 
-interface ChatHeaderProps {
-  roomName: string;
-  onBack: () => void;
-  onVoiceCall?: () => void;
-  onVideoCall?: () => void;
-}
 
 export default function ChatHeader({ roomName, onBack, onVoiceCall, onVideoCall }: ChatHeaderProps) {
   return (

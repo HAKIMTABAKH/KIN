@@ -1,18 +1,6 @@
+import { Profile, ProfileData } from '@/types';
 import { supabase } from './supabase';
 
-export interface Profile {
-  id: string;
-  full_name?: string;
-  avatar_url?: string;
-  email?: string;
-  updated_at?: string;
-}
-
-export interface ProfileData {
-  profile: Profile | null;
-  userEmail: string;
-  memberSince: string;
-}
 
 // Get current user's profile data
 export async function getProfileData(): Promise<ProfileData> {
@@ -103,3 +91,5 @@ export async function uploadAvatar(file: File | Blob, userId: string) {
     return { error, url: null };
   }
 }
+export { Profile };
+

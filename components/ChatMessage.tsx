@@ -1,18 +1,13 @@
-import { Message } from '@/lib/chat';
+import { ChatMessageProps } from '@/types';
 import { Text, View } from 'react-native';
 
-interface ChatMessageProps {
-  message: Message;
-  isCurrentUser: boolean;
-  showSeparator?: boolean;
-  separatorText?: string;
-}
 
-export default function ChatMessage({ 
-  message, 
-  isCurrentUser, 
-  showSeparator, 
-  separatorText 
+
+export default function ChatMessage({
+  message,
+  isCurrentUser,
+  showSeparator,
+  separatorText
 }: ChatMessageProps) {
   const currentDate = new Date(message.created_at);
 
@@ -40,11 +35,10 @@ export default function ChatMessage({
 
         {/* The Bubble */}
         <View
-          className={`px-4 py-3 rounded-2xl ${
-            isCurrentUser
+          className={`px-4 py-3 rounded-2xl ${isCurrentUser
               ? 'bg-kin-amber rounded-tr-sm'
               : 'bg-kin-midnight border border-kin-slate rounded-tl-sm'
-          }`}
+            }`}
         >
           <Text className={`font-outfit text-base ${isCurrentUser ? 'text-black font-outfit-medium' : 'text-kin-white'}`}>
             {message.content}

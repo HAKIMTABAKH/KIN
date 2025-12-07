@@ -1,18 +1,18 @@
-import { getCurrentUser, signOut } from '@/lib/auth';
+import BottomSheetMenu from '@/components/BottomSheetMenu';
+import { signOut } from '@/lib/auth';
 import { getProfileData, Profile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { 
-  Edit3, 
-  LogOut, 
-  Menu, 
-  Settings, 
-  Shield, 
-  UserCog, 
-  X 
+import {
+  Edit3,
+  LogOut,
+  Menu,
+  Settings,
+  Shield,
+  UserCog
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View, Modal } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
@@ -59,10 +59,39 @@ export default function ProfileScreen() {
     }
   }
 
-  const navigateTo = (path: any) => {
+  const navigateTo = (path: string) => {
     setMenuVisible(false);
     router.push(path);
   };
+
+  const menuItems = [
+    {
+      icon: Settings,
+      label: 'Settings & Privacy',
+      onPress: () => navigateTo('/settings'),
+    },
+    {
+      icon: UserCog,
+      label: 'Account Details',
+      onPress: () => navigateTo('/account'),
+    },
+    {
+      icon: Shield,
+      label: 'Security',
+      onPress: () => navigateTo('/security'),
+    },
+    {
+      icon: View,
+      label: 'divider',
+      onPress: () => {},
+    },
+    {
+      icon: LogOut,
+      label: 'Log Out',
+      onPress: handleSignOut,
+      isDestructive: true,
+    },
+  ];
 
   if (loading || signingOut) {
     return (
@@ -143,78 +172,13 @@ export default function ProfileScreen() {
 
       </ScrollView>
 
-      {/* ================================================= */}
-      {/*              THE BOTTOM SHEET MENU                */}
-      {/* ================================================= */}
-      <Modal
+      <BottomSheetMenu
         visible={menuVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        {/* Invisible Clickable Background to Close */}
-        <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
-          <View className="flex-1 bg-black/60 justify-end">
-            
-            {/* The Actual Menu Box */}
-            <TouchableWithoutFeedback>
-              <View className="bg-kin-charcoal rounded-t-3xl border-t border-kin-slate/30 pb-10 pt-4 px-6 shadow-2xl">
-                
-                {/* Handle Bar (Visual cue) */}
-                <View className="items-center mb-6">
-                  <View className="w-12 h-1.5 bg-kin-slate rounded-full" />
-                </View>
-
-                {/* Header */}
-                <View className="flex-row justify-between items-center mb-6">
-                  <Text className="text-kin-white font-outfit-bold text-xl">Menu</Text>
-                  <TouchableOpacity onPress={() => setMenuVisible(false)} className="bg-kin-midnight p-1 rounded-full">
-                    <X size={20} color="#7077A1" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Menu Items */}
-                <View className="bg-kin-midnight rounded-2xl overflow-hidden border border-kin-slate/30">
-                  
-                  <MenuItem 
-                    icon={Settings} 
-                    label="Settings & Privacy" 
-                    onPress={() => navigateTo('/settings')} 
-                  />
-                  
-                  <MenuItem 
-                    icon={UserCog} 
-                    label="Account Details" 
-                    onPress={() => navigateTo('/account')} 
-                  />
-
-                  <MenuItem 
-                    icon={Shield} 
-                    label="Security" 
-                    onPress={() => navigateTo('/security')} 
-                  />
-
-                  {/* Divider */}
-                  <View className="h-[1px] bg-kin-slate/30" />
-
-                  <MenuItem 
-                    icon={LogOut} 
-                    label="Log Out" 
-                    isDestructive 
-                    onPress={handleSignOut} 
-                  />
-
-                </View>
-
-                <Text className="text-center text-kin-mist/30 text-xs font-outfit mt-6">
-                  Kin v1.0.2
-                </Text>
-
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        onClose={() => setMenuVisible(false)}
+        title="Menu"
+        items={menuItems}
+        footer="Kin v1.0.0"
+      />
 
     </SafeAreaView>
   );
@@ -227,18 +191,4 @@ const StatBox = ({ number, label }: { number: string, label: string }) => (
     <Text className="text-kin-white font-outfit-bold text-lg">{number}</Text>
     <Text className="text-kin-mist text-xs font-outfit">{label}</Text>
   </View>
-);
-
-const MenuItem = ({ icon: Icon, label, onPress, isDestructive }: any) => (
-  <TouchableOpacity 
-    onPress={onPress}
-    className={`flex-row items-center p-4 active:bg-kin-slate/20 ${!isDestructive && 'border-b border-kin-slate/10'}`}
-  >
-    <View className={`h-10 w-10 rounded-full items-center justify-center mr-4 ${isDestructive ? 'bg-red-500/10' : 'bg-kin-slate/20'}`}>
-      <Icon size={20} color={isDestructive ? '#EF4444' : '#F59E0B'} />
-    </View>
-    <Text className={`font-outfit-medium text-base ${isDestructive ? 'text-red-500' : 'text-kin-white'}`}>
-      {label}
-    </Text>
-  </TouchableOpacity>
 );

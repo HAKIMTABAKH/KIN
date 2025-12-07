@@ -48,19 +48,7 @@ export default function SettingsScreen() {
     setLoading(false);
   }
 
-  async function handleSignOut() {
-    try {
-      setSigningOut(true);
-      const { error } = await signOut();
-      if (error) {
-        console.error('Error signing out:', error);
-        setSigningOut(false);
-      }
-    } catch (error) {
-      console.error('Error signing out:', error);
-      setSigningOut(false);
-    }
-  }
+ 
 
   if (loading) {
     return (
@@ -130,7 +118,6 @@ export default function SettingsScreen() {
             <Text className="text-kin-mist font-outfit-bold text-sm uppercase mb-3 ml-2 tracking-wider">Support</Text>
             <View className="bg-kin-midnight rounded-2xl overflow-hidden border border-kin-slate/50">
               <MenuItem icon={HelpCircle} label="Help Center" />
-              <MenuItem icon={LogOut} label="Log Out" isLast isDestructive onPress={handleSignOut} />
             </View>
           </View>
 

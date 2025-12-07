@@ -184,3 +184,129 @@ export function subscribeToRoom(roomId: string, onNewMessage: (message: Message)
 export function unsubscribeFromRoom(channel: any) {
   supabase.removeChannel(channel);
 }
+
+// ===== CHAT LIST & FRIENDS =====
+
+export interface Friend {
+  id: string;
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
+  isOnline: boolean;
+}
+
+export interface RoomWithUser {
+  id: string;
+  name?: string;
+  created_at: string;
+  displayName: string;
+  otherUserAvatar: string | null;
+  otherUserId: string | null;
+}
+
+// Fetch friends list
+export async function fetchFriends(): Promise<Friend[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: friendships } = await supabase
+      .from('friendships')
+      .select(`
+        id,
+        requester_id,
+        receiver_id,
+        profiles!friendships_requester_id_fkey (id, full_name, avatar_url),
+        receiver:profiles!friendships_receiver_id_fkey (id, full_name, avatar_url)
+      `)
+      .eq('status', 'accepted')
+      .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+    if (!friendships) return [];
+
+    const friendsList = friendships.map(friendship => {
+      const isRequester = friendship.requester_id === user.id;
+      const friendProfile = isRequester ? friendship.receiver : friendship.profiles;
+      
+      return {
+        id: friendship.id,
+        profile: Array.isArray(friendProfile) ? friendProfile[0] : friendProfile,
+        isOnline: Math.random() > 0.5 // TODO: Replace with actual online status
+      };
+    });
+
+    return friendsList;
+  } catch (error) {
+    console.error('Error fetching friends:', error);
+    return [];
+  }
+}
+
+// Fetch chat rooms list
+export async function fetchRooms(): Promise<RoomWithUser[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: userRooms, error: roomsError } = await supabase
+      .from('user_rooms')
+      .select('room_id')
+      .eq('user_id', user.id);
+
+    if (roomsError || !userRooms || userRooms.length === 0) {
+      return [];
+    }
+
+    const roomIds = userRooms.map(ur => ur.room_id);
+
+    const { data: roomsData, error: roomDetailsError } = await supabase
+      .from('rooms')
+      .select('*')
+      .in('id', roomIds)
+      .order('created_at', { ascending: false });
+
+    if (roomDetailsError || !roomsData) {
+      return [];
+    }
+
+    const roomsWithUsers = await Promise.all(
+      roomsData.map(async (room) => {
+        const { data: roomMembers } = await supabase
+          .from('user_rooms')
+          .select('user_id')
+          .eq('room_id', room.id);
+
+        const otherUserId = roomMembers?.find(m => m.user_id !== user.id)?.user_id;
+
+        if (otherUserId) {
+          const { data: otherUserProfile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', otherUserId)
+            .single();
+
+          return {
+            ...room,
+            displayName: otherUserProfile?.full_name || 'Unknown User',
+            otherUserAvatar: otherUserProfile?.avatar_url || null,
+            otherUserId: otherUserId
+          };
+        }
+
+        return {
+          ...room,
+          displayName: room.name || 'Chat',
+          otherUserAvatar: null,
+          otherUserId: null
+        };
+      })
+    );
+
+    return roomsWithUsers;
+  } catch (error) {
+    console.error('Error in fetchRooms:', error);
+    return [];
+  }
+}

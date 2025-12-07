@@ -1,16 +1,9 @@
+import { ChatInputProps } from '@/types';
 import { Camera, Image, Mic, Send, Smile } from 'lucide-react-native';
 import { useState } from 'react';
 import { LayoutAnimation, Platform, TextInput, TouchableOpacity, View } from 'react-native';
 import EmojiPicker, { type EmojiType } from 'rn-emoji-keyboard';
 
-interface ChatInputProps {
-  value: string;
-  onChangeText: (text: string) => void;
-  onSend: () => void;
-  onCameraPress?: () => void;
-  onMicPress?: () => void;
-  onImagePress?: () => void;
-}
 
 export default function ChatInput({
   value,

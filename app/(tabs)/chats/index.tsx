@@ -1,111 +1,81 @@
-import { supabase } from "@/lib/supabase";
-import { Link } from "expo-router";
-import { MessageSquarePlus, Search } from "lucide-react-native";
+import { fetchFriends, fetchRooms, Friend, RoomWithUser } from "@/lib/chat";
+import { Link, useRouter } from "expo-router";
+import { Search, SquarePen, UserPlus } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatsListScreen() {
-  const [rooms, setRooms] = useState<any[]>([]);
+  const router = useRouter();
+  const [rooms, setRooms] = useState<RoomWithUser[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
 
-
-    useEffect(() => {
-    fetchRooms();
+  useEffect(() => {
+    loadData();
   }, []);
 
-  async function fetchRooms() {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      // Fetch rooms where the current user is a member
-      const { data: userRooms, error: roomsError } = await supabase
-        .from('user_rooms')
-        .select('room_id')
-        .eq('user_id', user.id);
-
-      if (roomsError) {
-        console.error('Error fetching user rooms:', roomsError);
-        setLoading(false);
-        return;
-      }
-
-      if (!userRooms || userRooms.length === 0) {
-        setRooms([]);
-        setLoading(false);
-        return;
-      }
-
-      const roomIds = userRooms.map(ur => ur.room_id);
-
-      // Fetch room details
-      const { data: roomsData, error: roomDetailsError } = await supabase
-        .from('rooms')
-        .select('*')
-        .in('id', roomIds)
-        .order('created_at', { ascending: false });
-
-      if (roomDetailsError) {
-        console.error('Error fetching rooms:', roomDetailsError);
-        setLoading(false);
-        return;
-      }
-
-      // For each room, get the other user's info
-      const roomsWithUsers = await Promise.all(
-        (roomsData || []).map(async (room) => {
-          // Get all users in this room
-          const { data: roomMembers } = await supabase
-            .from('user_rooms')
-            .select('user_id')
-            .eq('room_id', room.id);
-
-          // Find the other user (not current user)
-          const otherUserId = roomMembers?.find(m => m.user_id !== user.id)?.user_id;
-
-          if (otherUserId) {
-            // Fetch other user's profile
-            const { data: otherUserProfile } = await supabase
-              .from('profiles')
-              .select('full_name, avatar_url')
-              .eq('id', otherUserId)
-              .single();
-
-            return {
-              ...room,
-              displayName: otherUserProfile?.full_name || 'Unknown User',
-              otherUserAvatar: otherUserProfile?.avatar_url,
-              otherUserId: otherUserId
-            };
-          }
-
-          return {
-            ...room,
-            displayName: room.name || 'Chat',
-            otherUserAvatar: null,
-            otherUserId: null
-          };
-        })
-      );
-
-      setRooms(roomsWithUsers);
-    } catch (error) {
-      console.error('Error in fetchRooms:', error);
-    } finally {
-      setLoading(false);
-    }
+  async function loadData() {
+    setLoading(true);
+    const [roomsData, friendsData] = await Promise.all([
+      fetchRooms(),
+      fetchFriends()
+    ]);
+    setRooms(roomsData);
+    setFriends(friendsData);
+    setLoading(false);
   }
 
-  async function createTestRoom() {
-    // Temporary helper to create a room so you can see it
-    await supabase.from('rooms').insert([{ name: 'General Chat' }]);
-    fetchRooms();
-  }
+
+  // --- ONLINE FRIENDS RAIL ---
+  const renderFriendsRail = () => (
+    <View className="mb-6">
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        contentContainerStyle={{ paddingHorizontal: 24, gap: 16 }}
+      >
+        {/* "Add Friend" Bubble */}
+        <View className="items-center">
+          <TouchableOpacity 
+            className="h-16 w-16 rounded-full border-2 border-dashed border-kin-slate items-center justify-center mb-2"
+            onPress={() => router.push('/add-friend')}
+          >
+            <UserPlus size={24} color="#7077A1" />
+          </TouchableOpacity>
+          <Text className="text-kin-mist text-xs font-outfit">Add</Text>
+        </View>
+
+        {/* Friends */}
+        {friends.map((item) => (
+          <TouchableOpacity 
+            key={item.id} 
+            className="items-center"
+            onPress={() => {
+              // Find the room with this friend and navigate to it
+              const room = rooms.find(r => r.otherUserId === item.profile?.id);
+              if (room) {
+                router.push(`/chat/${room.id}`);
+              }
+            }}
+          >
+            <View className="relative">
+              <Image 
+                source={{ uri: item.profile?.avatar_url || 'https://i.pravatar.cc/150' }} 
+                className="h-16 w-16 rounded-full bg-kin-slate mb-2" 
+              />
+              {item.isOnline && (
+                <View className="absolute bottom-2 right-0 h-4 w-4 bg-green-500 rounded-full border-2 border-kin-charcoal" />
+              )}
+            </View>
+            <Text className="text-kin-white text-xs font-outfit-medium w-16 text-center" numberOfLines={1}>
+              {item.profile?.full_name?.split(' ')[0] || 'Friend'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
 
   const renderItem = ({ item }: { item: any }) => (
     <Link href={`/chat/${item.id}`} asChild>
@@ -133,12 +103,12 @@ export default function ChatsListScreen() {
         <View>
           <Text className="text-kin-mist font-outfit text-sm uppercase tracking-widest">Workspace</Text>
           <Text className="text-kin-white font-outfit-bold text-3xl">Messages</Text>
-        </View>
-        
-        {/* Button to create a test room */}
-        <TouchableOpacity onPress={createTestRoom} className="h-12 w-12 bg-kin-amber rounded-full items-center justify-center shadow-lg">
-          <MessageSquarePlus color="#111827" size={24} />
-        </TouchableOpacity>
+        </View>  
+        <Link href="/new-chat" asChild>
+          <TouchableOpacity className="h-12 w-12 rounded-full bg-kin-slate items-center justify-center">
+            <SquarePen  color="#F59E0B" size={22} />
+          </TouchableOpacity>
+        </Link>
       </View>
 
       <View className="px-6 my-4">
@@ -151,6 +121,9 @@ export default function ChatsListScreen() {
           />
         </View>
       </View>
+
+      {/* Online Friends Rail */}
+      {!loading && friends.length > 0 && renderFriendsRail()}
 
       {loading ? (
         <ActivityIndicator color="#F59E0B" className="mt-10" />

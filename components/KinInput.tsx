@@ -1,15 +1,7 @@
-import { LucideIcon } from 'lucide-react-native';
-import { Text, TextInput, TextInputProps, TouchableOpacity, View } from 'react-native';
+import { KinInputProps } from '@/types';
+import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-interface KinInputProps extends TextInputProps {
-  icon: LucideIcon;
-  placeholder: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  error?: string;
-  rightIcon?: LucideIcon;
-  onRightIconPress?: () => void;
-}
+
 
 export default function KinInput({
   icon: Icon,

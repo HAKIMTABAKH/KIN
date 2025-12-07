@@ -1,12 +1,7 @@
 import { Text, Pressable, View } from 'react-native';
 import { cn } from '../lib/utils';
+import { KinButtonProps } from '@/types';
 
-interface KinButtonProps {
-  title: string;
-  onPress?: () => void;
-  variant?: 'primary' | 'secondary';
-  className?: string;
-}
 
 export function KinButton({ title, onPress, variant = 'primary', className }: KinButtonProps) {
   return (

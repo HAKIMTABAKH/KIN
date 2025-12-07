@@ -1,10 +1,10 @@
 import { supabase } from '@/lib/supabase';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, MessageSquare, User } from 'lucide-react-native';
+import { Bell, Home, MessageCircle, Users, Users2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import ProfileTabIcon from '../../components/ProfileTabIcon';
 import { syncCurrentUserProfile } from '../../lib/auth';
-
 export default function TabsLayout() {
   const router = useRouter();
   const [isChecking, setIsChecking] = useState(true);
@@ -78,7 +78,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chats"
         options={{
-          tabBarIcon: ({ color }) => <MessageSquare  color={color} size={28} />,
+          tabBarIcon: ({ color }) => <MessageCircle  color={color} size={28} />,
+        }}
+      />
+      <Tabs.Screen
+        name="People"
+        options={{
+          tabBarIcon: ({ color }) => <Users  color={color} size={28} />,
         }}
       />
 
@@ -86,7 +92,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="Profile"
         options={{
-          tabBarIcon: ({ color }) => <User color={color} size={28} />,
+          tabBarIcon: ({ color, size }) => <ProfileTabIcon color={color} size={size || 28} />,
         }}
       />
     </Tabs>

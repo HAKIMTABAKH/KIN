@@ -48,9 +48,7 @@ export default function Index() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Index - Auth event:', event, 'Has session:', !!session);
       if (session) {
-        console.log('Index - Session user:', session.user.email);
       }
       
       if (mounted) {
@@ -64,7 +62,6 @@ export default function Index() {
         
         // On sign out, ensure we're not stuck in checking state
         if (event === 'SIGNED_OUT') {
-          console.log('Index - Sign out detected, clearing auth state');
           setIsAuthenticated(false);
           setIsChecking(false);
         }

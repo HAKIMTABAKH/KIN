@@ -18,17 +18,19 @@ export default function FeedScreen() {
         
         <View className="flex-row gap-3">
           {/* REQUESTS BUTTON */}
-          <Link href="/requests" asChild>
-            <TouchableOpacity className="h-12 w-12 bg-kin-midnight rounded-full items-center justify-center border border-kin-slate/50">
-              <Bell color="#F59E0B" size={22} />
-              {/* Optional: Add a red dot here if there are pending requests */}
-            </TouchableOpacity>
-          </Link>
+            <TouchableOpacity 
+            onPress={() => router.push('/(app)/Notifications')}
+            className="h-10 w-10 bg-kin-midnight rounded-full items-center justify-center border border-kin-slate/30"
+          >
+            <Bell color="#F59E0B" size={22} />
+            {/* Red Dot for unread */}
+            <View className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-kin-charcoal" />
+          </TouchableOpacity>
 
           {/* ADD FRIEND BUTTON */}
           <Link href="/add-friend" asChild>
-            <TouchableOpacity className="h-12 w-12 bg-kin-amber rounded-full items-center justify-center shadow-lg">
-              <Search  color="#111827" size={22} />
+            <TouchableOpacity className="h-10 w-10 bg-kin-amber rounded-full items-center justify-center shadow-lg">
+              <UserPlus   color="#111827" size={22} />
             </TouchableOpacity>
           </Link>
         </View>

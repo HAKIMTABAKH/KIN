@@ -1,14 +1,7 @@
-import { ChevronRight, LucideIcon } from 'lucide-react-native';
+import { MenuItemProps } from '@/types';
+import { ChevronRight } from 'lucide-react-native';
 import { Text, TouchableOpacity, View } from 'react-native';
 
-interface MenuItemProps {
-  icon: LucideIcon;
-  label: string;
-  value?: string;
-  isLast?: boolean;
-  isDestructive?: boolean;
-  onPress?: () => void;
-}
 
 export default function MenuItem({ 
   icon: Icon, 

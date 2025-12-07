@@ -4,8 +4,8 @@ import { Session } from "@supabase/supabase-js";
 import { SplashScreen, Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { UserProvider } from '../context/UserContext';
 import "./global.css";
-
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -83,19 +83,21 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="welcome" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen 
-        name="chat/[id]" 
-        options={{
-          headerShown: false,
-          headerTitle: "Chat",
-          presentation: "card"
-        }}
-      />
-    </Stack>
+    <UserProvider> 
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(app)" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen 
+          name="chat/[id]" 
+          options={{
+            headerShown: false,
+            headerTitle: "Chat",
+            presentation: "card"
+          }}
+        />
+      </Stack>
+    </UserProvider>
   );
 }
