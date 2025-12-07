@@ -1,7 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, Image, Text, View } from 'react-native';
 
-export default function TypingIndicator({ isVisible }: { isVisible: boolean }) {
+interface TypingIndicatorProps {
+  isVisible: boolean;
+  avatarUrl?: string;
+  userName?: string;
+}
+
+export default function TypingIndicator({ isVisible, avatarUrl, userName }: TypingIndicatorProps) {
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
@@ -35,13 +41,32 @@ export default function TypingIndicator({ isVisible }: { isVisible: boolean }) {
   if (!isVisible) return null;
 
   return (
-    <View className="flex-row items-center ml-4 mb-2 mt-1">
-      <View className="bg-kin-midnight px-4 py-3 rounded-2xl rounded-tl-sm border border-kin-slate/50 flex-row space-x-1">
-        <Dot anim={dot1} />
-        <Dot anim={dot2} />
-        <Dot anim={dot3} />
+    <View className="flex-row items-start ml-4 mb-2 mt-1">
+      {/* Profile Image */}
+      <View className="mr-2">
+        {avatarUrl ? (
+          <Image 
+            source={{ uri: avatarUrl }} 
+            className="w-8 h-8 rounded-full"
+          />
+        ) : (
+          <View className="w-8 h-8 rounded-full bg-kin-slate items-center justify-center">
+            <Text className="text-kin-white text-sm font-outfit-bold">
+              {userName?.charAt(0).toUpperCase() || '?'}
+            </Text>
+          </View>
+        )}
       </View>
-      <Text className="text-kin-mist text-[10px] ml-2 font-outfit">typing...</Text>
+
+      {/* Typing Bubble */}
+      <View>
+        <View className="bg-kin-midnight px-4 py-3 rounded-2xl rounded-tl-sm border border-kin-slate/50 flex-row space-x-1">
+          <Dot anim={dot1} />
+          <Dot anim={dot2} />
+          <Dot anim={dot3} />
+        </View>
+        <Text className="text-kin-mist text-[10px] ml-1 mt-1 font-outfit">typing...</Text>
+      </View>
     </View>
   );
 }
