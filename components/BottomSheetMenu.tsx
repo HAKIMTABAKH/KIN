@@ -8,7 +8,8 @@ import { Modal, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'r
 export default function BottomSheetMenu({ 
   visible, 
   onClose, 
-  title = 'Menu', 
+  title = 'Menu',
+  subtitle,
   items,
   footer 
 }: BottomSheetMenuProps) {
@@ -30,8 +31,15 @@ export default function BottomSheetMenu({
               </View>
 
               {/* Header */}
-              <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-kin-white font-outfit-bold text-xl">{title}</Text>
+              <View className="flex-row justify-between items-start mb-6">
+                <View className="flex-1">
+                  <Text className="text-kin-white font-outfit-bold text-xl">{title}</Text>
+                  {subtitle && (
+                    <Text className="text-kin-mist text-sm font-outfit mt-1">
+                      {subtitle}
+                    </Text>
+                  )}
+                </View>
                 <TouchableOpacity onPress={onClose} className="bg-kin-midnight p-1 rounded-full">
                   <X size={20} color="#7077A1" />
                 </TouchableOpacity>
@@ -50,6 +58,7 @@ export default function BottomSheetMenu({
                 ))}
               </View>
 
+              {/* Footer */}
               {footer && (
                 <Text className="text-center text-kin-mist/30 text-xs font-outfit mt-6">
                   {footer}

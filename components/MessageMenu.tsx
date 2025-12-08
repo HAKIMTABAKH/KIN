@@ -1,3 +1,4 @@
+import { MessageMenuProps } from '@/types';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Copy, CornerUpLeft, Forward, Plus, Trash2 } from 'lucide-react-native';
@@ -7,15 +8,6 @@ import EmojiPicker, { type EmojiType } from 'rn-emoji-keyboard';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
-type MessageMenuProps = {
-  visible: boolean;
-  message: any;
-  isMe: boolean;
-  onClose: () => void;
-  onReply: (msg: any) => void;
-  onDelete: (id: string) => void;
-  onReaction: (emoji: string) => void;
-};
 
 export default function MessageMenu({ visible, message, isMe, onClose, onReply, onDelete, onReaction }: MessageMenuProps) {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);

@@ -1,9 +1,13 @@
+import { cancelRequest, searchUsers, sendFriendRequest } from '@/lib/people';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { Check, Search, UserPlus, X } from 'lucide-react-native';
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Check, Clock, Search, UserPlus, UserX, X } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const SEARCH_HISTORY_KEY = 'search_history';
 
 export default function AddFriendScreen() {
     const router = useRouter();
@@ -12,184 +16,137 @@ export default function AddFriendScreen() {
     const [loading, setLoading] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+    const [searchHistory, setSearchHistory] = useState<any[]>([]);
 
-    // 1. Search Logic
-    const handleSearch = async () => {
-        if (query.length < 3) {
-            alert('Please enter at least 3 characters');
-            return;
-        }
-
-        setLoading(true);
-
-        try {
-            // Get current user ID first
+    // Get current user and load search history on mount
+    useEffect(() => {
+        async function getCurrentUser() {
             const { data: { user } } = await supabase.auth.getUser();
             setCurrentUserId(user?.id || null);
-
-            if (!user) {
-                alert('Please log in first');
-                setLoading(false);
-                return;
+        }
+        async function loadSearchHistory() {
+            try {
+                const history = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+                if (history) {
+                    setSearchHistory(JSON.parse(history));
+                }
+            } catch (error) {
+                console.error('Error loading search history:', error);
             }
+        }
+        getCurrentUser();
+        loadSearchHistory();
+    }, []);
 
-            // Search profiles (ILIKE is case-insensitive)
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .ilike('full_name', `%${query}%`)
-                .neq('id', user.id)
-                .limit(10);
-
-            if (error) {
-                console.error('Search error:', error);
-                alert('Error searching users');
-                setResults([]);
-            } else {
-                // Check friendship status for each user
-                const resultsWithStatus = await Promise.all(
-                    (data || []).map(async (profile) => {
-                        // Check if there's a friendship (in either direction)
-                        const { data: friendship } = await supabase
-                            .from('friendships')
-                            .select('status')
-                            .or(`and(requester_id.eq.${user.id},receiver_id.eq.${profile.id}),and(requester_id.eq.${profile.id},receiver_id.eq.${user.id})`)
-                            .single();
-
-                        return {
-                            ...profile,
-                            friendshipStatus: friendship?.status || null
-                        };
-                    })
-                );
-
-                setResults(resultsWithStatus);
-            }
+    // Save user to search history
+    async function addToHistory(user: any) {
+        try {
+            const newHistory = [user, ...searchHistory.filter(u => u.id !== user.id)].slice(0, 10);
+            setSearchHistory(newHistory);
+            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(newHistory));
         } catch (error) {
-            console.error('Error in handleSearch:', error);
-            alert('An error occurred');
-        } finally {
+            console.error('Error saving search history:', error);
+        }
+    }
+
+    // Clear search history
+    async function clearHistory() {
+        try {
+            setSearchHistory([]);
+            await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
+        } catch (error) {
+            console.error('Error clearing search history:', error);
+        }
+    }
+
+    // Intelligent search with debounce
+    useEffect(() => {
+        // Clear results if query is empty
+        if (!query.trim()) {
+            setResults([]);
             setLoading(false);
-        }
-    };
-
-    // 2. Send Request Logic
-    const sendRequest = async (receiverId: string) => {
-        if (!currentUserId || processingRequests.has(receiverId)) {
             return;
         }
 
-        // Mark as processing
-        setProcessingRequests(prev => new Set(prev).add(receiverId));
-
-        try {
-            const { error } = await supabase
-                .from('friendships')
-                .insert({
-                    requester_id: currentUserId,
-                    receiver_id: receiverId,
-                    status: 'pending'
-                });
-
-            if (error) {
-                console.error('Error sending request:', error);
-                if (error.code !== '23505') {
-                    // Only show error if it's not a duplicate
-                    console.error('Error sending request: ' + error.message);
-                }
-            } else {
-                // Update the UI to show pending status
-                setResults(prev => prev.map(p =>
-                    p.id === receiverId
-                        ? { ...p, friendshipStatus: 'pending' }
-                        : p
-                ));
-            }
-        } catch (error) {
-            console.error('Error in sendRequest:', error);
-        } finally {
-            // Remove from processing after a delay
-            setTimeout(() => {
-                setProcessingRequests(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(receiverId);
-                    return newSet;
-                });
-            }, 1000);
-        }
-    };
-
-    // 3. Cancel Request Logic
-    const cancelRequest = async (receiverId: string) => {
-        if (!currentUserId || processingRequests.has(receiverId)) {
-            return;
-        }
-
-        // Mark as processing
-        setProcessingRequests(prev => new Set(prev).add(receiverId));
-
-        try {
-            console.log('Canceling request from', currentUserId, 'to', receiverId);
+        // Debounce: wait 500ms after user stops typing
+        const delayDebounceFn = setTimeout(async () => {
+            if (!currentUserId) return;
             
-            // First, check which direction the friendship exists
-            const { data: existingFriendship } = await supabase
-                .from('friendships')
-                .select('*')
-                .or(`and(requester_id.eq.${currentUserId},receiver_id.eq.${receiverId}),and(requester_id.eq.${receiverId},receiver_id.eq.${currentUserId})`)
-                .eq('status', 'pending')
-                .single();
+            setLoading(true);
+            const cleanQuery = query.trim();
+            const searchResults = await searchUsers(currentUserId, cleanQuery);
+            setResults(searchResults);
+            setLoading(false);
+        }, 500);
 
-            console.log('Found friendship:', existingFriendship);
+        return () => clearTimeout(delayDebounceFn);
+    }, [query, currentUserId]);
 
-            if (existingFriendship) {
-                // Delete using the ID
-                const { data, error } = await supabase
-                    .from('friendships')
-                    .delete()
-                    .eq('id', existingFriendship.id)
-                    .select();
+    async function handleSendRequest(receiverId: string) {
+        if (!currentUserId || processingRequests.has(receiverId)) return;
 
-                if (error) {
-                    console.error('Error canceling request:', error);
-                    console.error('Error details:', error.message);
-                } else {
-                    console.log('Request canceled successfully:', data);
-                    // Update the UI to remove pending status
-                    setResults(prev => prev.map(p =>
-                        p.id === receiverId
-                            ? { ...p, friendshipStatus: null }
-                            : p
-                    ));
-                }
-            } else {
-                console.log('No pending friendship found to cancel');
+        setProcessingRequests(prev => new Set(prev).add(receiverId));
+
+        const success = await sendFriendRequest(currentUserId, receiverId);
+        
+        if (success) {
+            const user = results.find(p => p.id === receiverId);
+            if (user) {
+                await addToHistory({ ...user, friendshipStatus: 'pending' });
             }
-        } catch (error) {
-            console.error('Error in cancelRequest:', error);
-        } finally {
-            // Remove from processing after a delay
-            setTimeout(() => {
-                setProcessingRequests(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(receiverId);
-                    return newSet;
-                });
-            }, 1000);
+            setResults(prev => prev.map(p =>
+                p.id === receiverId ? { ...p, friendshipStatus: 'pending' } : p
+            ));
         }
-    };
+
+        setTimeout(() => {
+            setProcessingRequests(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(receiverId);
+                return newSet;
+            });
+        }, 1000);
+    }
+
+    async function handleCancelRequest(receiverId: string) {
+        if (!currentUserId || processingRequests.has(receiverId)) return;
+
+        setProcessingRequests(prev => new Set(prev).add(receiverId));
+
+        const success = await cancelRequest(currentUserId, receiverId);
+        
+        if (success) {
+            setResults(prev => prev.map(p =>
+                p.id === receiverId ? { ...p, friendshipStatus: null } : p
+            ));
+        }
+
+        setTimeout(() => {
+            setProcessingRequests(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(receiverId);
+                return newSet;
+            });``
+        }, 1000);
+    }
 
     return (
         <SafeAreaView className="flex-1 bg-kin-charcoal">
-            {/* Header */}
-            <View className="flex-row items-center px-4 py-4 border-b border-kin-slate/30">
-                <TouchableOpacity onPress={() => router.back()} className="mr-4">
-                    <X color="#F59E0B" size={24} />
-                </TouchableOpacity>
-                <Text className="text-kin-white font-outfit-bold text-xl">Find People</Text>
-            </View>
+            <KeyboardAvoidingView 
+                className="flex-1" 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={0}
+            >
+                {/* Header */}
+                <View className="flex-row items-center px-4 py-4 border-b border-kin-slate/30">
+                    <TouchableOpacity onPress={() => router.back()} className="mr-4">
+                        <X color="#F59E0B" size={24} />
+                    </TouchableOpacity>
+                    <Text className="text-kin-white font-outfit-bold text-xl">Find People</Text>
+                </View>
 
-            {/* Search Input */}
-            <View className="px-4 py-4">
+                {/* Search Input */}
+                <View className="px-4 py-4">
                 <View className="flex-row items-center bg-kin-midnight h-12 rounded-xl px-4 border border-kin-slate">
                     <Search color="#7077A1" size={20} />
                     <TextInput
@@ -198,22 +155,70 @@ export default function AddFriendScreen() {
                         placeholderTextColor="#7077A1"
                         value={query}
                         onChangeText={setQuery}
-                        onSubmitEditing={handleSearch}
-                        returnKeyType="search"
+                        autoCapitalize="none"
+                        autoCorrect={false}
                     />
+                    {query.length > 0 && (
+                        <TouchableOpacity onPress={() => setQuery('')}>
+                            <X size={16} color="#7077A1" />
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
+            {/* Search History */}
+            {query.length === 0 && searchHistory.length > 0 && (
+                <View className="px-4 mb-4">
+                    <View className="flex-row items-center justify-between mb-3">
+                        <Text className="text-kin-mist text-xs font-outfit-bold uppercase tracking-widest">
+                            Recent Searches
+                        </Text>
+                        <TouchableOpacity onPress={clearHistory}>
+                            <Text className="text-kin-amber text-xs font-outfit-bold">CLEAR</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
             {/* Results List */}
             {loading ? (
-                <ActivityIndicator color="#F59E0B" className="mt-10" />
+                <View className="mt-10">
+                    <ActivityIndicator color="#F59E0B" />
+                    <Text className="text-kin-mist text-center mt-2 font-outfit">Searching...</Text>
+                </View>
+            ) : query.length > 0 && results.length === 0 ? (
+                <View className="flex-1 items-center px-6 pt-20">
+                    <View className="items-center">
+                        <View className="h-20 w-20 bg-kin-midnight rounded-full items-center justify-center mb-4">
+                            <UserX size={40} color="#7077A1" />
+                        </View>
+                        <Text className="text-kin-white font-outfit-bold text-lg mb-2">
+                            No Users Found
+                        </Text>
+                        <Text className="text-kin-mist text-center font-outfit">
+                            We couldn't find anyone named "{query}"
+                        </Text>
+                    </View>
+                </View>
             ) : (
                 <FlatList
-                    data={results}
+                    data={query.length > 0 ? results : searchHistory}
                     keyExtractor={(item) => item.id}
+                    keyboardShouldPersistTaps="handled"
+                    ListHeaderComponent={query.length === 0 && searchHistory.length > 0 ? (
+                        <View className="flex-row items-center px-6 mb-2">
+                            <Clock size={14} color="#7077A1" />
+                            <Text className="text-kin-mist text-xs font-outfit ml-2">
+                                Tap to view profile again
+                            </Text>
+                        </View>
+                    ) : null}
                     renderItem={({ item }) => (
                         <TouchableOpacity
-                            onPress={() => router.push(`/user/${item.id}`)}
+                            onPress={() => {
+                                addToHistory(item);
+                                router.push(`/user/${item.id}`);
+                            }}
                             className="flex-row items-center justify-between px-6 py-4 border-b border-kin-slate/10 active:bg-kin-slate/10"
                         >
                             <View className="flex-row items-center flex-1">
@@ -243,7 +248,7 @@ export default function AddFriendScreen() {
                                 <TouchableOpacity
                                     onPress={(e) => {
                                         e.stopPropagation();
-                                        cancelRequest(item.id);
+                                        handleCancelRequest(item.id);
                                     }}
                                     disabled={processingRequests.has(item.id)}
                                     className="bg-kin-slate/30 px-4 py-2 rounded-lg flex-row items-center"
@@ -255,7 +260,7 @@ export default function AddFriendScreen() {
                                 <TouchableOpacity
                                     onPress={(e) => {
                                         e.stopPropagation();
-                                        sendRequest(item.id);
+                                        handleSendRequest(item.id);
                                     }}
                                     disabled={processingRequests.has(item.id)}
                                     className="bg-kin-amber px-4 py-2 rounded-lg flex-row items-center"
@@ -268,6 +273,7 @@ export default function AddFriendScreen() {
                     )}
                 />
             )}
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }

@@ -3,12 +3,8 @@
 import React from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
 import { useUser } from '../context/UserContext'; // Import the hook
+import { ProfileTabIconProps } from '@/types';
 
-// Define the props for the component
-interface ProfileTabIconProps {
-  color: string;
-  size: number;
-}
 
 const ProfileTabIcon = ({ color, size }: ProfileTabIconProps) => {
   const { profile, loading } = useUser();
@@ -18,10 +14,7 @@ const ProfileTabIcon = ({ color, size }: ProfileTabIconProps) => {
     return <ActivityIndicator size="small" color={color} />;
   }
 
-  // If there's no profile (user not logged in), show a default icon
   if (!profile) {
-    // You can import and use your default User icon here
-    // return <User color={color} size={size} />;
     return <View className="w-8 h-8 bg-gray-500 rounded-full" />; // Simple placeholder
   }
 

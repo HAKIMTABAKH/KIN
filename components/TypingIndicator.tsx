@@ -1,11 +1,6 @@
+import { TypingIndicatorProps } from '@/types';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Image, Text, View } from 'react-native';
-
-interface TypingIndicatorProps {
-  isVisible: boolean;
-  avatarUrl?: string;
-  userName?: string;
-}
 
 export default function TypingIndicator({ isVisible, avatarUrl, userName }: TypingIndicatorProps) {
   const dot1 = useRef(new Animated.Value(0)).current;

@@ -1,8 +1,8 @@
 // context/UserContext.tsx
 
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types'; // Import the Profile type
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 // Define the shape of the context value
 interface UserContextType {
@@ -32,8 +32,8 @@ export const UserProvider = ({ children }: UserProviderProps) => {
           .from('profiles')
           .select('*')
           .eq('id', user.id)
-          .single()
-          .returns<Profile>(); // Assert the return type
+          .returns<Profile>()
+          .single();
         
         setProfile(data);
       }

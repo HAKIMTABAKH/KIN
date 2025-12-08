@@ -1,7 +1,6 @@
 // types/index.ts
 
-import { Message } from "@/lib/chat";
-import { LogOut, LucideIcon } from "lucide-react-native";
+import { LucideIcon } from "lucide-react-native";
 import { TextInputProps } from "react-native";
 
 export interface Profile {
@@ -27,6 +26,7 @@ export interface BottomSheetMenuProps {
   visible: boolean;
   onClose: () => void;
   title?: string;
+  subtitle?: string;
   items: MenuItem[];
   footer?: string;
 }
@@ -78,4 +78,99 @@ export interface ChatHeaderProps {
   onBack: () => void;
   onVoiceCall?: () => void;
   onVideoCall?: () => void;
+}
+
+export interface FriendRequest {
+  id: string;
+  requester_id: string;
+  profiles: {
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
+export interface Friend {
+  id: string;
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
+export interface Suggestion {
+  id: string;
+  full_name: string;
+  avatar_url?: string;
+  friendshipStatus: string | null;
+}
+
+export interface Message {
+  id: string;
+  content: string;
+  room_id: string;
+  user_id: string;
+  created_at: string;
+  reply_to_id?: string | null;
+  reactions?: Record<string, string[]>; // emoji -> array of user IDs
+  profiles?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+  reply_message?: {
+    id: string;
+    content: string;
+    profiles?: {
+      full_name?: string;
+    };
+  } | null;
+}
+
+export interface Room {
+  id: string;
+  name: string;
+  created_at: string;
+}
+export interface UserCardProps {
+  title: string;
+  subtitle: string;
+  avatarUrl?: string;
+  onPress?: () => void;
+  rightAction?: React.ReactNode;
+  bottomAction?: React.ReactNode;
+}
+
+
+export interface TypingIndicatorProps {
+  isVisible: boolean;
+  avatarUrl?: string;
+  userName?: string;
+}
+export interface ProfileTabIconProps {
+  color: string;
+  size: number;
+}
+export type MessageMenuProps = {
+  visible: boolean;
+  message: any;
+  isMe: boolean;
+  onClose: () => void;
+  onReply: (msg: any) => void;
+  onDelete: (id: string) => void;
+  onReaction: (emoji: string) => void;
+}
+export interface UserProfile {
+  id: string;
+  full_name?: string;
+  avatar_url?: string;
+  bio?: string;
+  created_at?: string;
+}
+export interface BlockedUser {
+  id: string;
+  blocked_user_id: string;
+  profile: {
+    full_name: string;
+    avatar_url?: string;
+  };
 }

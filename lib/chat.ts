@@ -1,31 +1,7 @@
+import { Message } from '@/types';
 import { supabase } from './supabase';
 
-export interface Message {
-  id: string;
-  content: string;
-  room_id: string;
-  user_id: string;
-  created_at: string;
-  reply_to_id?: string | null;
-  reactions?: Record<string, string[]>; // emoji -> array of user IDs
-  profiles?: {
-    full_name?: string;
-    avatar_url?: string;
-  };
-  reply_message?: {
-    id: string;
-    content: string;
-    profiles?: {
-      full_name?: string;
-    };
-  } | null;
-}
 
-export interface Room {
-  id: string;
-  name: string;
-  created_at: string;
-}
 
 // Get room details by ID
 export async function getRoomDetails(roomId: string) {
@@ -250,6 +226,21 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
+    // Get blocked users (both directions)
+    const { data: blockedByMe } = await supabase
+      .from('blocked_users')
+      .select('blocked_user_id')
+      .eq('user_id', user.id);
+    
+    const { data: blockedMe } = await supabase
+      .from('blocked_users')
+      .select('user_id')
+      .eq('blocked_user_id', user.id);
+    
+    const blockedIds = new Set<string>();
+    blockedByMe?.forEach(b => blockedIds.add(b.blocked_user_id));
+    blockedMe?.forEach(b => blockedIds.add(b.user_id));
+
     const { data: userRooms, error: roomsError } = await supabase
       .from('user_rooms')
       .select('room_id')
@@ -281,6 +272,11 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
         const otherUserId = roomMembers?.find(m => m.user_id !== user.id)?.user_id;
 
         if (otherUserId) {
+          // Skip if user is blocked
+          if (blockedIds.has(otherUserId)) {
+            return null;
+          }
+
           const { data: otherUserProfile } = await supabase
             .from('profiles')
             .select('full_name, avatar_url')
@@ -304,7 +300,8 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
       })
     );
 
-    return roomsWithUsers;
+    // Filter out null values (blocked users)
+    return roomsWithUsers.filter((room): room is RoomWithUser => room !== null);
   } catch (error) {
     console.error('Error in fetchRooms:', error);
     return [];

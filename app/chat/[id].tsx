@@ -6,24 +6,24 @@ import { fetchMessageById, Message } from '@/lib/chat';
 import { handleDelete, handleInputChange, handleLongPress, handleReaction, handleReply, handleSendMessage, scrollToMessage, setupRoom } from '@/lib/chatHandlers';
 import { getSeparatorText } from '@/lib/dateHelpers';
 import {
-  getMessageBubbleMinWidth,
-  getUserInitial,
-  isEmojiOnly,
-  normalizeReplyData
+    getMessageBubbleMinWidth,
+    getUserInitial,
+    isEmojiOnly,
+    normalizeReplyData
 } from '@/lib/messageHelpers';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ArrowDownFromLine, Clock, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -43,6 +43,8 @@ export default function ChatRoomScreen() {
   const [isTyping, setIsTyping] = useState(false); // Is someone else typing?
   const [typingUserProfile, setTypingUserProfile] = useState<{ avatar_url?: string; full_name?: string } | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false); // Show scroll to bottom button
+  const [blockStatus, setBlockStatus] = useState<'none' | 'blocked_by_me' | 'blocked_me'>('none');
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
   
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To clear the bubble
   const myTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To throttle my sending
@@ -139,6 +141,54 @@ export default function ChatRoomScreen() {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
     };
+  }, [id, currentUserId]);
+
+  // Check block status
+  useEffect(() => {
+    async function checkBlockStatus() {
+      if (!currentUserId) return;
+
+      // Get other user in the room
+      const { data: roomMembers } = await supabase
+        .from('user_rooms')
+        .select('user_id')
+        .eq('room_id', id);
+
+      const otherUser = roomMembers?.find(m => m.user_id !== currentUserId);
+      if (!otherUser) return;
+
+      setOtherUserId(otherUser.user_id);
+
+      // Check if I blocked them
+      const { data: iBlockedThem } = await supabase
+        .from('blocked_users')
+        .select('id')
+        .eq('user_id', currentUserId)
+        .eq('blocked_user_id', otherUser.user_id)
+        .single();
+
+      if (iBlockedThem) {
+        setBlockStatus('blocked_by_me');
+        return;
+      }
+
+      // Check if they blocked me
+      const { data: theyBlockedMe } = await supabase
+        .from('blocked_users')
+        .select('id')
+        .eq('user_id', otherUser.user_id)
+        .eq('blocked_user_id', currentUserId)
+        .single();
+
+      if (theyBlockedMe) {
+        setBlockStatus('blocked_me');
+        return;
+      }
+
+      setBlockStatus('none');
+    }
+
+    checkBlockStatus();
   }, [id, currentUserId]);
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -410,14 +460,58 @@ export default function ChatRoomScreen() {
           </View>
         )}
 
-        <ChatInput
-          value={inputText}
-          onChangeText={(text) => handleInputChange(text, setInputText, currentUserId, id, myTypingTimeoutRef)}
-          onSend={() => handleSendMessage(inputText, currentUserId, id, replyingTo, setInputText, setReplyingTo, setMessages)}
-          onCameraPress={() => console.log('Camera')}
-          onMicPress={() => console.log('Mic')}
-          onImagePress={() => console.log('Image')}
-        />
+        {/* Block Status UI */}
+        {blockStatus === 'blocked_by_me' ? (
+          <View className="bg-kin-midnight px-6 py-4 border-t border-kin-slate/30">
+            <View className="bg-kin-slate/20 p-4 rounded-xl items-center">
+              <Text className="text-kin-white font-outfit-bold text-base mb-2">
+                You blocked this user
+              </Text>
+              <Text className="text-kin-mist text-sm text-center mb-4">
+                Unblock to continue the conversation
+              </Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!currentUserId || !otherUserId) return;
+                  const { data } = await supabase
+                    .from('blocked_users')
+                    .select('id')
+                    .eq('user_id', currentUserId)
+                    .eq('blocked_user_id', otherUserId)
+                    .single();
+                  
+                  if (data) {
+                    await supabase.from('blocked_users').delete().eq('id', data.id);
+                    setBlockStatus('none');
+                  }
+                }}
+                className="bg-kin-amber px-6 py-3 rounded-xl"
+              >
+                <Text className="text-black font-outfit-bold">Unblock User</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : blockStatus === 'blocked_me' ? (
+          <View className="bg-kin-midnight px-6 py-4 border-t border-kin-slate/30">
+            <View className="bg-red-500/10 p-4 rounded-xl items-center border border-red-500/20">
+              <Text className="text-red-500 font-outfit-bold text-base mb-2">
+                This user blocked you
+              </Text>
+              <Text className="text-kin-mist text-sm text-center">
+                You can't send messages to this user
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <ChatInput
+            value={inputText}
+            onChangeText={(text) => handleInputChange(text, setInputText, currentUserId, id, myTypingTimeoutRef)}
+            onSend={() => handleSendMessage(inputText, currentUserId, id, replyingTo, setInputText, setReplyingTo, setMessages)}
+            onCameraPress={() => console.log('Camera')}
+            onMicPress={() => console.log('Mic')}
+            onImagePress={() => console.log('Image')}
+          />
+        )}
       </KeyboardAvoidingView>
 
       {/* Message Menu Modal */}

@@ -1,18 +1,13 @@
 import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { UserProfile } from '@/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Edit3, Settings } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-interface UserProfile {
-  id: string;
-  full_name?: string;
-  avatar_url?: string;
-  bio?: string;
-  created_at?: string;
-}
+
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

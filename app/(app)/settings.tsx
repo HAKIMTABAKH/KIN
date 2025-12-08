@@ -1,14 +1,13 @@
 import MenuItem from '@/components/MenuItem';
-import { signOut } from '@/lib/auth';
 import { getProfileData, Profile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import {
+    Ban,
     Bell,
     CreditCard,
     Globe,
     HelpCircle,
-    LogOut,
     Moon,
     Shield,
     User
@@ -86,6 +85,11 @@ export default function SettingsScreen() {
             <View className="bg-kin-midnight rounded-2xl overflow-hidden border border-kin-slate/50">
               <MenuItem icon={User} label="Personal Info" />
               <MenuItem icon={Shield} label="Privacy & Security" />
+              <MenuItem 
+                icon={Ban} 
+                label="Blocked Users" 
+                onPress={() => router.push('/blocked-users')}
+              />
               <MenuItem icon={CreditCard} label="Subscription" isLast />
             </View>
           </View>
