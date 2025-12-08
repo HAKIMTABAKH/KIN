@@ -174,3 +174,18 @@ export interface BlockedUser {
     avatar_url?: string;
   };
 }
+
+export type Notification = {
+  id: string;
+  type: 'friend_request' | 'like' | 'comment' | 'system';
+  text: string;
+  time: string;
+  read: boolean;
+  requester_id?: string;
+  avatar_url?: string;
+  full_name?: string;
+}
+export type NotificationSection = {
+  title: string;
+  data: Notification[];
+};

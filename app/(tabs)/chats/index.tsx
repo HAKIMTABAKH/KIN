@@ -1,6 +1,8 @@
-import { fetchFriends, fetchRooms, Friend, RoomWithUser } from "@/lib/chat";
-import { Link, useRouter } from "expo-router";
-import { Search, SquarePen, UserPlus } from "lucide-react-native";
+import BottomSheetMenu from "@/components/BottomSheetMenu";
+import { deleteRoomForUser, fetchFriends, fetchRooms, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "expo-router";
+import { Archive, Bell, BellOff, Circle, Pin, Search, SquarePen, Trash2, UserPlus, Users } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +12,8 @@ export default function ChatsListScreen() {
   const [rooms, setRooms] = useState<RoomWithUser[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<RoomWithUser | null>(null);
 
   useEffect(() => {
     loadData();
@@ -51,13 +55,7 @@ export default function ChatsListScreen() {
           <TouchableOpacity 
             key={item.id} 
             className="items-center"
-            onPress={() => {
-              // Find the room with this friend and navigate to it
-              const room = rooms.find(r => r.otherUserId === item.profile?.id);
-              if (room) {
-                router.push(`/chat/${room.id}`);
-              }
-            }}
+            onPress={() => handleFriendClick(item.profile?.id)}
           >
             <View className="relative">
               <Image 
@@ -77,24 +75,60 @@ export default function ChatsListScreen() {
     </View>
   );
 
+  function openRoomMenu(room: RoomWithUser) {
+    setSelectedRoom(room);
+    setMenuVisible(true);
+  }
+
+  async function handleDeleteRoom() {
+    if (!selectedRoom) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const success = await deleteRoomForUser(selectedRoom.id, user.id);
+    
+    if (success) {
+      setRooms(prev => prev.filter(r => r.id !== selectedRoom.id));
+      setMenuVisible(false);
+      setSelectedRoom(null);
+    }
+  }
+
+  async function handleFriendClick(friendId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Get or create a chat room with this friend
+    const roomId = await getOrCreateChatWithFriend(user.id, friendId);
+    
+    if (roomId) {
+      // Reload rooms to show the new/existing room
+      await loadData();
+      router.push(`/chat/${roomId}`);
+    }
+  }
+
   const renderItem = ({ item }: { item: any }) => (
-    <Link href={`/chat/${item.id}`} asChild>
-      <TouchableOpacity className="flex-row items-center p-4 border-b border-kin-slate/20 active:bg-kin-slate/10">
-        <View className="h-14 w-14 rounded-full bg-kin-slate items-center justify-center mr-4 overflow-hidden">
-          {item.otherUserAvatar ? (
-            <Image source={{ uri: item.otherUserAvatar }} className="h-full w-full" />
-          ) : (
-            <Text className="text-kin-white font-outfit-bold text-xl">
-              {item.displayName ? item.displayName[0].toUpperCase() : '#'}
-            </Text>
-          )}
-        </View>
-        <View className="flex-1">
-          <Text className="text-kin-white font-outfit-bold text-lg">{item.displayName}</Text>
-          <Text className="text-kin-mist font-outfit text-sm">Tap to chat</Text>
-        </View>
-      </TouchableOpacity>
-    </Link>
+    <TouchableOpacity 
+      onPress={() => router.push(`/chat/${item.id}`)}
+      onLongPress={() => openRoomMenu(item)}
+      className="flex-row items-center p-4 border-b border-kin-slate/20 active:bg-kin-slate/10"
+    >
+      <View className="h-14 w-14 rounded-full bg-kin-slate items-center justify-center mr-4 overflow-hidden">
+        {item.otherUserAvatar ? (
+          <Image source={{ uri: item.otherUserAvatar }} className="h-full w-full" />
+        ) : (
+          <Text className="text-kin-white font-outfit-bold text-xl">
+            {item.displayName ? item.displayName[0].toUpperCase() : '#'}
+          </Text>
+        )}
+      </View>
+      <View className="flex-1">
+        <Text className="text-kin-white font-outfit-bold text-lg">{item.displayName}</Text>
+        <Text className="text-kin-mist font-outfit text-sm">Tap to chat</Text>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -104,11 +138,12 @@ export default function ChatsListScreen() {
           <Text className="text-kin-mist font-outfit text-sm uppercase tracking-widest">Workspace</Text>
           <Text className="text-kin-white font-outfit-bold text-3xl">Messages</Text>
         </View>  
-        <Link href="/new-chat" asChild>
-          <TouchableOpacity className="h-12 w-12 rounded-full bg-kin-slate items-center justify-center">
-            <SquarePen  color="#F59E0B" size={22} />
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity 
+          onPress={() => router.push('/new-chat' as any)}
+          className="h-12 w-12 rounded-full bg-kin-slate items-center justify-center"
+        >
+          <SquarePen  color="#F59E0B" size={22} />
+        </TouchableOpacity>
       </View>
 
       <View className="px-6 my-4">
@@ -138,6 +173,73 @@ export default function ChatsListScreen() {
               <Text className="text-kin-amber font-outfit text-sm">Tap the + button to create one.</Text>
             </View>
           }
+        />
+      )}
+
+      {/* Chat Options Menu */}
+      {selectedRoom && (
+        <BottomSheetMenu
+          visible={menuVisible}
+          onClose={() => {
+            setMenuVisible(false);
+            setSelectedRoom(null);
+          }}
+          title={selectedRoom.displayName}
+          subtitle="Chat Options"
+          items={[
+            {
+              icon: Pin,
+              label: 'Pin Chat',
+              onPress: () => {
+                setMenuVisible(false);
+                // TODO: Implement pin chat
+              }
+            },
+            {
+              icon: Archive,
+              label: 'Archive Chat',
+              onPress: () => {
+                setMenuVisible(false);
+                // TODO: Implement archive chat
+              }
+            },
+            {
+              icon: BellOff,
+              label: 'Mute Notifications',
+              onPress: () => {
+                setMenuVisible(false);
+                // TODO: Implement mute
+              }
+            },
+            {
+              icon: Users,
+              label: `Create Group with ${selectedRoom.displayName}`,
+              onPress: () => {
+                setMenuVisible(false);
+                // TODO: Implement create group
+              }
+            },
+            {
+              icon: Bell,
+              label: 'Mark as Read',
+              onPress: () => {
+                setMenuVisible(false);
+                // TODO: Implement mark as read
+              }
+            },
+            {
+              icon: Circle,
+              label: 'divider',
+              onPress: () => {}
+            },
+            {
+              icon: Trash2,
+              label: 'Delete Chat',
+              onPress: handleDeleteRoom,
+              isDestructive: true
+            }
+          ]}
+          footer="More options coming soon"
         />
       )}
     </SafeAreaView>

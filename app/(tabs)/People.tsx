@@ -16,7 +16,7 @@ import {
   unfriendUser
 } from '@/lib/people';
 import { supabase } from '@/lib/supabase';
-import { FriendRequest, Friend } from '@/types';
+import { Friend, FriendRequest } from '@/types';
 import { useRouter } from 'expo-router';
 import { Ban, Check, Circle, Clock, Ellipsis, MessageCircle, Search, UserMinus, UserPlus, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -162,6 +162,8 @@ export default function PeopleScreen() {
     if (roomId) {
       router.push(`/chat/${roomId}`);
     } else {
+      // This shouldn't happen for friends, but fallback to chats tab
+      console.warn('No chat room found for friend, redirecting to chats');
       router.push('/(tabs)/chats');
     }
   }

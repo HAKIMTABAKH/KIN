@@ -220,20 +220,25 @@ export async function acceptRequest(uid: string, friendshipId: string, senderId:
   
   if (updateError) return false;
 
-  // Create chat room
-  const { data: room } = await supabase
-    .from('rooms')
-    .insert({ name: 'DM' })
-    .select()
-    .single();
+  // Check if chat room already exists
+  const existingRoom = await getChatRoomWithFriend(uid, senderId);
   
-  if (room) {
-    await supabase
-      .from('user_rooms')
-      .insert([
-        { user_id: uid, room_id: room.id },
-        { user_id: senderId, room_id: room.id }
-      ]);
+  // Only create chat room if it doesn't exist
+  if (!existingRoom) {
+    const { data: room } = await supabase
+      .from('rooms')
+      .insert({ name: 'DM' })
+      .select()
+      .single();
+    
+    if (room) {
+      await supabase
+        .from('user_rooms')
+        .insert([
+          { user_id: uid, room_id: room.id },
+          { user_id: senderId, room_id: room.id }
+        ]);
+    }
   }
   
   return true;
@@ -325,17 +330,47 @@ export async function getChatRoomWithFriend(uid: string, friendId: string): Prom
 
   const roomIds = userRooms.map(ur => ur.room_id);
 
-  // Check which room has the friend
+  // Check which room has the friend (and only 2 members for DM)
   for (const roomId of roomIds) {
     const { data: roomMembers } = await supabase
       .from('user_rooms')
       .select('user_id')
       .eq('room_id', roomId);
 
-    const hasFriend = roomMembers?.some(m => m.user_id === friendId);
-    if (hasFriend) {
-      return roomId;
+    // Check if this is a DM room (exactly 2 members) with the friend
+    if (roomMembers && roomMembers.length === 2) {
+      const memberIds = roomMembers.map(m => m.user_id);
+      if (memberIds.includes(uid) && memberIds.includes(friendId)) {
+        return roomId;
+      }
     }
+  }
+
+  return null;
+}
+
+// Create or get chat room with a friend
+export async function getOrCreateChatRoom(uid: string, friendId: string): Promise<string | null> {
+  // First, try to find existing room
+  const existingRoom = await getChatRoomWithFriend(uid, friendId);
+  if (existingRoom) return existingRoom;
+
+  // If no room exists, create one
+  const { data: room } = await supabase
+    .from('rooms')
+    .insert({ name: 'DM' })
+    .select()
+    .single();
+  
+  if (room) {
+    await supabase
+      .from('user_rooms')
+      .insert([
+        { user_id: uid, room_id: room.id },
+        { user_id: friendId, room_id: room.id }
+      ]);
+    
+    return room.id;
   }
 
   return null;

@@ -23,12 +23,29 @@ export async function getRoomDetails(roomId: string) {
 // Fetch messages for a room
 export async function fetchMessages(roomId: string) {
   try {
-    // First, fetch all messages with profiles
-    const { data: messages, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: [], error: null };
+
+    // Check if user deleted this room (get the timestamp)
+    const { data: deletedRoom, error: deletedError } = await supabase
+      .from('deleted_rooms')
+      .select('deleted_at')
+      .eq('user_id', user.id)
+      .eq('room_id', roomId)
+      .maybeSingle();
+
+    // Fetch messages (only after delete timestamp if room was deleted)
+    let query = supabase
       .from('messages')
       .select('*, profiles(full_name, avatar_url)')
-      .eq('room_id', roomId)
-      .order('created_at', { ascending: false });
+      .eq('room_id', roomId);
+
+    // If room was deleted, only show messages after that time
+    if (!deletedError && deletedRoom && deletedRoom.deleted_at) {
+      query = query.gt('created_at', deletedRoom.deleted_at);
+    }
+
+    const { data: messages, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
     if (!messages || messages.length === 0) {
@@ -250,7 +267,18 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
       return [];
     }
 
-    const roomIds = userRooms.map(ur => ur.room_id);
+    // Get rooms that user has deleted (soft delete)
+    const { data: deletedRooms } = await supabase
+      .from('deleted_rooms')
+      .select('room_id')
+      .eq('user_id', user.id);
+
+    const deletedRoomIds = new Set(deletedRooms?.map(dr => dr.room_id) || []);
+
+    // Filter out deleted rooms
+    const roomIds = userRooms
+      .map(ur => ur.room_id)
+      .filter(roomId => !deletedRoomIds.has(roomId));
 
     const { data: roomsData, error: roomDetailsError } = await supabase
       .from('rooms')
@@ -291,6 +319,28 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
           };
         }
 
+        // If no other user found (they left), try to find who was in this room from messages
+        if (room.name === 'DM') {
+          const { data: lastMessage } = await supabase
+            .from('messages')
+            .select('user_id, profiles(full_name, avatar_url)')
+            .eq('room_id', room.id)
+            .neq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (lastMessage && lastMessage.profiles) {
+            const profile = Array.isArray(lastMessage.profiles) ? lastMessage.profiles[0] : lastMessage.profiles;
+            return {
+              ...room,
+              displayName: profile.full_name || 'Unknown User',
+              otherUserAvatar: profile.avatar_url || null,
+              otherUserId: lastMessage.user_id
+            };
+          }
+        }
+
         return {
           ...room,
           displayName: room.name || 'Chat',
@@ -305,5 +355,84 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
   } catch (error) {
     console.error('Error in fetchRooms:', error);
     return [];
+  }
+}
+
+// Delete a chat room (soft delete - marks as deleted for this user only)
+export async function deleteRoomForUser(roomId: string, userId: string): Promise<boolean> {
+  try {
+    // Mark the room as deleted for this user (soft delete)
+    // This hides old messages but keeps the room for the other user
+    const { error } = await supabase
+      .from('deleted_rooms')
+      .insert({
+        user_id: userId,
+        room_id: roomId
+      });
+
+    if (error) throw error;
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting room for user:', error);
+    return false;
+  }
+}
+
+// Get or create chat room with a friend (for clicking on friend in rail)
+export async function getOrCreateChatWithFriend(userId: string, friendId: string): Promise<string | null> {
+  try {
+    // Check if there's an existing DM room between these two users
+    const { data: allRooms } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('name', 'DM');
+
+    if (allRooms && allRooms.length > 0) {
+      // Check each DM room to see if it's between these two users
+      for (const room of allRooms) {
+        const { data: members } = await supabase
+          .from('user_rooms')
+          .select('user_id')
+          .eq('room_id', room.id);
+
+        if (members && members.length === 2) {
+          const memberIds = members.map(m => m.user_id);
+          if (memberIds.includes(userId) && memberIds.includes(friendId)) {
+            // Found existing room! Remove from deleted_rooms if it was deleted
+            await supabase
+              .from('deleted_rooms')
+              .delete()
+              .eq('user_id', userId)
+              .eq('room_id', room.id);
+
+            return room.id;
+          }
+        }
+      }
+    }
+
+    // No existing room found, create a new one
+    const { data: newRoom } = await supabase
+      .from('rooms')
+      .insert({ name: 'DM' })
+      .select()
+      .single();
+
+    if (newRoom) {
+      await supabase
+        .from('user_rooms')
+        .insert([
+          { user_id: userId, room_id: newRoom.id },
+          { user_id: friendId, room_id: newRoom.id }
+        ]);
+
+      return newRoom.id;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting or creating chat:', error);
+    return null;
   }
 }

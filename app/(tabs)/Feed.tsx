@@ -1,10 +1,35 @@
+import { fetchRequests } from "@/lib/people";
+import { supabase } from "@/lib/supabase";
+import { useFocusEffect } from "@react-navigation/native";
 import { Link, useRouter } from "expo-router";
-import { Bell, Search, UserPlus } from "lucide-react-native";
+import { Bell, UserPlus } from "lucide-react-native";
+import { useCallback, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const LAST_SEEN_KEY = 'notifications_last_seen';
+
 export default function FeedScreen() {
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUnreadCount();
+    }, [])
+  );
+
+  async function loadUnreadCount() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const requests = await fetchRequests(user.id);
+      setUnreadCount(requests.length);
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+    }
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-kin-charcoal">
@@ -18,13 +43,19 @@ export default function FeedScreen() {
         
         <View className="flex-row gap-3">
           {/* REQUESTS BUTTON */}
-            <TouchableOpacity 
+          <TouchableOpacity 
             onPress={() => router.push('/(app)/Notifications')}
-            className="h-10 w-10 bg-kin-midnight rounded-full items-center justify-center border border-kin-slate/30"
+            className="h-10 w-10 bg-kin-midnight rounded-full items-center justify-center border border-kin-slate/30 relative"
           >
             <Bell color="#F59E0B" size={22} />
-            {/* Red Dot for unread */}
-            <View className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-kin-charcoal" />
+            {/* Badge with count */}
+            {unreadCount > 0 && (
+              <View className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 rounded-full items-center justify-center border-2 border-kin-charcoal">
+                <Text className="text-white text-xs font-outfit-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* ADD FRIEND BUTTON */}
