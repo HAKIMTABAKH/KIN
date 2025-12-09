@@ -6,26 +6,37 @@ import { fetchMessageById, Message } from '@/lib/chat';
 import { handleDelete, handleInputChange, handleLongPress, handleReaction, handleReply, handleSendMessage, scrollToMessage, setupRoom } from '@/lib/chatHandlers';
 import { getSeparatorText } from '@/lib/dateHelpers';
 import {
-    getMessageBubbleMinWidth,
-    getUserInitial,
-    isEmojiOnly,
-    normalizeReplyData
+  getUserInitial,
+  isEmojiOnly,
+  normalizeReplyData
 } from '@/lib/messageHelpers';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ArrowDownFromLine, Clock, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Helper to format "Seen X ago"
+const formatTimeAgo = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  return date.toLocaleDateString();
+};
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,8 +60,30 @@ export default function ChatRoomScreen() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To clear the bubble
   const myTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To throttle my sending
 
+  // Mark messages as read
+  const markAsRead = async () => {
+    if (!currentUserId || !id) return;
+    
+    // Update ALL messages in this room that:
+    // 1. Are NOT from me
+    // 2. Are currently unread (read_at is null)
+    const { error } = await supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('room_id', id)
+      .neq('user_id', currentUserId)
+      .is('read_at', null);
+    
+    if (error) console.error('Error marking read:', error);
+  };
+
   useEffect(() => {
     setupRoom(id, setCurrentUserId, setRoomName, setMessages, setLoading, router);
+    
+    // Mark existing messages as read when entering the room
+    if (currentUserId) {
+      markAsRead();
+    }
 
     // Subscribe to realtime messages and updates
     const channel = supabase
@@ -80,11 +113,16 @@ export default function ChatRoomScreen() {
                   return [data, ...prev];
                 }
               });
+              
+              // If a NEW message arrives and I'm looking at the screen, mark it read
+              if (data.user_id !== currentUserId) {
+                markAsRead();
+              }
             }
           }
 
           if (payload.eventType === 'UPDATE') {
-            // Update the specific message in our local list
+            // Update the specific message in our local list (including read_at updates)
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === payload.new.id ? { ...msg, ...payload.new } : msg
@@ -216,6 +254,19 @@ export default function ChatRoomScreen() {
     // 6. Check message status (for optimistic sending)
     const isSending = (item as any).status === 'sending';
     const isError = (item as any).status === 'error';
+    
+    // 7. Check if this is the latest message sent by me (for read receipt)
+    // Only show "Seen" if:
+    // - This is my message
+    // - It's the most recent message I sent
+    // - The other user hasn't replied yet (the very first message in the list should be mine)
+    const myMessages = messages.filter(m => m.user_id === currentUserId);
+    const isLatestOwnMessage = myMessages.length > 0 && myMessages[0].id === item.id;
+    const otherUserHasReplied = messages.length > 0 && messages[0].user_id !== currentUserId;
+    const readAt = (item as any).read_at;
+    
+    // Show read receipt only if it's my latest message AND the other user hasn't replied yet
+    const shouldShowReadReceipt = isMe && isLatestOwnMessage && readAt && !otherUserHasReplied;
 
     return (
       <View>
@@ -229,7 +280,7 @@ export default function ChatRoomScreen() {
         )}
 
         {/* MESSAGE CONTAINER */}
-        <View className={`mb-2 flex-row ${isMe ? 'self-end' : 'self-start'} max-w-[80%]`}>
+        <View className={`mb-2 ${isMe ? 'self-end items-end' : 'self-start items-start flex-row'} max-w-[80%]`}>
           {/* Profile Image (Other users only) */}
           {!isMe && !onlyEmojis && (
             <TouchableOpacity 
@@ -256,7 +307,7 @@ export default function ChatRoomScreen() {
             </TouchableOpacity>
           )}
 
-          <View className="flex-shrink">
+          <View className={`flex-shrink ${isMe ? 'items-end' : ''}`}>
             <TouchableOpacity 
               onLongPress={() => handleLongPress(item, setSelectedMessage)}
               delayLongPress={300}
@@ -272,16 +323,14 @@ export default function ChatRoomScreen() {
           {/* THE BUBBLE */}
           <View 
             className={`
-              relative
+              relative mb-6
               ${onlyEmojis ? 'bg-transparent px-0 py-0' : 'px-4 py-3 rounded-2xl'}
               ${!onlyEmojis && isMe ? 'bg-kin-amber rounded-tr-sm' : ''}
               ${!onlyEmojis && !isMe ? 'bg-kin-midnight border border-kin-slate rounded-tl-sm' : ''}
-              ${hasReactions ? 'mb-4' : ''}
               ${isFlashing && !onlyEmojis ? (isMe ? 'opacity-70' : 'bg-kin-slate/50') : ''}
               ${isSending ? 'opacity-70' : 'opacity-100'}
             `}
             style={{ 
-              minWidth: getMessageBubbleMinWidth(hasReactions),
               alignSelf: 'flex-start'
             }}
           >
@@ -346,23 +395,29 @@ export default function ChatRoomScreen() {
               </TouchableOpacity>
             )}
           </View>
-
-              {/* STATUS INDICATORS (Sending/Error Icons) */}
-              {!onlyEmojis && (
-                <View className={`flex-row items-center mt-1 ${isMe ? 'justify-end mr-1' : 'ml-1'}`}>
-                  
-                  {/* Sending Icon */}
-                  {isSending && (
-                    <Clock size={10} color="#F59E0B" style={{ marginLeft: 4 }} />
-                  )}
-                  
-                  {/* Error Icon */}
-                  {isError && (
-                    <AlertCircle size={10} color="#EF4444" style={{ marginLeft: 4 }} />
-                  )}
-                </View>
-              )}
             </TouchableOpacity>
+            
+            {/* STATUS INDICATORS (Sending/Error/Read) - Show for ALL messages */}
+            <View className="flex-row items-center gap-1" style={{ marginTop: hasReactions ? 4 : 4 }}>
+            
+              
+              {/* Sending Icon */}
+              {isSending && (
+                <Clock size={10} color="#F59E0B" />
+              )}
+              
+              {/* Error Icon */}
+              {isError && (
+                <AlertCircle size={10} color="#EF4444" />
+              )}
+              
+              {/* Read Receipt */}
+              {shouldShowReadReceipt && !isSending && !isError && (
+                <Text className="text-[10px] text-kin-amber font-outfit-bold">
+                  • Seen {formatTimeAgo(readAt)}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
       </View>

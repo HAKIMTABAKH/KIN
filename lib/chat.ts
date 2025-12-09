@@ -445,3 +445,5 @@ export async function getOrCreateChatWithFriend(userId: string, friendId: string
     return null;
   }
 }
+export { Friend, RoomWithUser, Message };
+
