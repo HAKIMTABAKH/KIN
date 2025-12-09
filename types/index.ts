@@ -189,3 +189,22 @@ export type NotificationSection = {
   title: string;
   data: Notification[];
 };
+
+export interface Friend {
+  id: string;
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
+  isOnline: boolean;
+}
+
+export interface RoomWithUser {
+  id: string;
+  name?: string;
+  created_at: string;
+  displayName: string;
+  otherUserAvatar: string | null;
+  otherUserId: string | null;
+}

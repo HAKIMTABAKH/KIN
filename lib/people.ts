@@ -77,7 +77,8 @@ export async function fetchFriends(uid: string): Promise<Friend[]> {
     const friendProfile = i.requester_id === uid ? i.receiver : i.requester;
     return {
       id: i.id,
-      profile: Array.isArray(friendProfile) ? friendProfile[0] : friendProfile
+      profile: Array.isArray(friendProfile) ? friendProfile[0] : friendProfile,
+      isOnline: false // TODO: Implement online status tracking
     };
   });
 }

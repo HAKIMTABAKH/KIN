@@ -1,4 +1,4 @@
-import { Message } from '@/types';
+import { Friend, Message, RoomWithUser } from '@/types';
 import { supabase } from './supabase';
 
 
@@ -34,8 +34,6 @@ export async function fetchMessages(roomId: string) {
       .eq('room_id', roomId)
       .maybeSingle();
 
-    console.log('[fetchMessages] Room:', roomId, 'Deleted room data:', deletedRoom, 'Error:', deletedError);
-
     // Fetch messages (only after delete timestamp if room was deleted)
     let query = supabase
       .from('messages')
@@ -44,7 +42,6 @@ export async function fetchMessages(roomId: string) {
 
     // If room was deleted, only show messages after that time
     if (!deletedError && deletedRoom && deletedRoom.deleted_at) {
-      console.log('[fetchMessages] Filtering messages after:', deletedRoom.deleted_at);
       query = query.gt('created_at', deletedRoom.deleted_at);
     }
 
@@ -183,24 +180,6 @@ export function unsubscribeFromRoom(channel: any) {
 
 // ===== CHAT LIST & FRIENDS =====
 
-export interface Friend {
-  id: string;
-  profile: {
-    id: string;
-    full_name: string;
-    avatar_url?: string;
-  };
-  isOnline: boolean;
-}
-
-export interface RoomWithUser {
-  id: string;
-  name?: string;
-  created_at: string;
-  displayName: string;
-  otherUserAvatar: string | null;
-  otherUserId: string | null;
-}
 
 // Fetch friends list
 export async function fetchFriends(): Promise<Friend[]> {
@@ -276,12 +255,6 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
       .select('*')
       .eq('user_id', user.id);
 
-    // Debug logging
-    console.log('[fetchRooms] Current user ID:', user.id);
-    console.log('[fetchRooms] User rooms:', userRooms.map(ur => ur.room_id));
-    console.log('[fetchRooms] Deleted rooms query result:', deletedRooms);
-    console.log('[fetchRooms] Deleted error:', deletedError);
-
     // Create a map of deleted rooms with their deleted_at timestamps
     const deletedRoomsMap = new Map<string, string>();
     deletedRooms?.forEach(dr => deletedRoomsMap.set(dr.room_id, dr.deleted_at));
@@ -307,13 +280,11 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
         if (count && count > 0) {
           // There are new messages, show the room
           roomsToShow.push(ur.room_id);
-          console.log('[fetchRooms] Room', ur.room_id, 'has', count, 'new messages after deletion');
         }
       }
     }
     
     const roomIds = roomsToShow;
-    console.log('[fetchRooms] Final room IDs to show:', roomIds);
 
     const { data: roomsData, error: roomDetailsError } = await supabase
       .from('rooms')
@@ -395,9 +366,7 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
 
 // Delete a chat room (soft delete - marks as deleted for this user only)
 export async function deleteRoomForUser(roomId: string, userId: string): Promise<boolean> {
-  try {
-    console.log('[deleteRoomForUser] Deleting room:', roomId, 'for user:', userId);
-    
+  try {    
     // Mark the room as deleted for this user (soft delete)
     // This hides old messages but keeps the room for the other user
     // Use upsert to handle cases where the entry already exists

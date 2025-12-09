@@ -1,4 +1,5 @@
 import BottomSheetMenu from "@/components/BottomSheetMenu";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { deleteRoomForUser, fetchFriends, fetchRooms, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -14,6 +15,7 @@ export default function ChatsListScreen() {
   const [loading, setLoading] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithUser | null>(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -87,6 +89,12 @@ export default function ChatsListScreen() {
     setMenuVisible(true);
   }
 
+  function confirmDeleteRoom() {
+    if (!selectedRoom) return;
+    setMenuVisible(false);
+    setDeleteDialogVisible(true);
+  }
+
   async function handleDeleteRoom() {
     if (!selectedRoom) return;
 
@@ -97,7 +105,6 @@ export default function ChatsListScreen() {
     
     if (success) {
       setRooms(prev => prev.filter(r => r.id !== selectedRoom.id));
-      setMenuVisible(false);
       setSelectedRoom(null);
     }
   }
@@ -182,6 +189,21 @@ export default function ChatsListScreen() {
         />
       )}
 
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        onClose={() => {
+          setDeleteDialogVisible(false);
+          setSelectedRoom(null);
+        }}
+        onConfirm={handleDeleteRoom}
+        title="Delete Chat"
+        message={`Are you sure you want to delete the entire conversation with ${selectedRoom?.displayName || 'this user'}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDestructive={true}
+      />
+
       {/* Chat Options Menu */}
       {selectedRoom && (
         <BottomSheetMenu
@@ -241,7 +263,7 @@ export default function ChatsListScreen() {
             {
               icon: Trash2,
               label: 'Delete Chat',
-              onPress: handleDeleteRoom,
+              onPress: confirmDeleteRoom,
               isDestructive: true
             }
           ]}

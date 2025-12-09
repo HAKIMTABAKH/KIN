@@ -25,7 +25,6 @@ export const setupRoom = async (
   
   // Check authentication
   if (!user) {
-    console.log('ChatRoom - No user found, redirecting to sign-in');
     router.replace('/(auth)/sign-in');
     return;
   }
@@ -205,7 +204,7 @@ export const handleDelete = async (
     console.error('Error deleting message:', error);
     // Optionally: Refetch messages to restore the message if delete failed
     const { data } = await fetchMessages(roomId);
-    if (data) setMessages(data);
+    if (data) setMessages(() => data);
   }
 };
 

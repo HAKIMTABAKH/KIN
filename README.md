@@ -56,7 +56,7 @@ To get a local copy of KIN up and running, follow these steps.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/kin.git
+git clone https://github.com/HAKIMTABAKH/KIN
 cd kin
 
 # Install dependencies
@@ -136,9 +136,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Your Name - [@your-twitter](https://twitter.com/your-twitter) - your.email@email.com
+Your Name - [@your-twitter](https://twitter.com/your-twitter) - your.hakim.tabakh@isimg.tn
 
-Project Link: [https://github.com/your-username/kin](https://github.com/your-username/kin)
+Project Link: [https://github.com/HAKIMTABAKH](https://github.com/HAKIMTABAKH/KIN)
 ```
 
 ### Why this README is better for your project:
