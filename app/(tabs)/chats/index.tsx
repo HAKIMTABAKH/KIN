@@ -1,9 +1,9 @@
 import BottomSheetMenu from "@/components/BottomSheetMenu";
 import { deleteRoomForUser, fetchFriends, fetchRooms, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Archive, Bell, BellOff, Circle, Pin, Search, SquarePen, Trash2, UserPlus, Users } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,6 +18,13 @@ export default function ChatsListScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   async function loadData() {
     setLoading(true);
@@ -103,8 +110,7 @@ export default function ChatsListScreen() {
     const roomId = await getOrCreateChatWithFriend(user.id, friendId);
     
     if (roomId) {
-      // Reload rooms to show the new/existing room
-      await loadData();
+      // Navigate to chat - room will appear in list only after sending a message
       router.push(`/chat/${roomId}`);
     }
   }

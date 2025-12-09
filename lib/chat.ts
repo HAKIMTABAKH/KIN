@@ -34,6 +34,8 @@ export async function fetchMessages(roomId: string) {
       .eq('room_id', roomId)
       .maybeSingle();
 
+    console.log('[fetchMessages] Room:', roomId, 'Deleted room data:', deletedRoom, 'Error:', deletedError);
+
     // Fetch messages (only after delete timestamp if room was deleted)
     let query = supabase
       .from('messages')
@@ -42,6 +44,7 @@ export async function fetchMessages(roomId: string) {
 
     // If room was deleted, only show messages after that time
     if (!deletedError && deletedRoom && deletedRoom.deleted_at) {
+      console.log('[fetchMessages] Filtering messages after:', deletedRoom.deleted_at);
       query = query.gt('created_at', deletedRoom.deleted_at);
     }
 
@@ -268,17 +271,49 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
     }
 
     // Get rooms that user has deleted (soft delete)
-    const { data: deletedRooms } = await supabase
+    const { data: deletedRooms, error: deletedError } = await supabase
       .from('deleted_rooms')
-      .select('room_id')
+      .select('*')
       .eq('user_id', user.id);
 
-    const deletedRoomIds = new Set(deletedRooms?.map(dr => dr.room_id) || []);
+    // Debug logging
+    console.log('[fetchRooms] Current user ID:', user.id);
+    console.log('[fetchRooms] User rooms:', userRooms.map(ur => ur.room_id));
+    console.log('[fetchRooms] Deleted rooms query result:', deletedRooms);
+    console.log('[fetchRooms] Deleted error:', deletedError);
 
-    // Filter out deleted rooms
-    const roomIds = userRooms
-      .map(ur => ur.room_id)
-      .filter(roomId => !deletedRoomIds.has(roomId));
+    // Create a map of deleted rooms with their deleted_at timestamps
+    const deletedRoomsMap = new Map<string, string>();
+    deletedRooms?.forEach(dr => deletedRoomsMap.set(dr.room_id, dr.deleted_at));
+
+    // For each deleted room, check if there are new messages after deleted_at
+    // If yes, show the room in the list
+    const roomsToShow: string[] = [];
+    
+    for (const ur of userRooms) {
+      const deletedAt = deletedRoomsMap.get(ur.room_id);
+      
+      if (!deletedAt) {
+        // Room not deleted, show it
+        roomsToShow.push(ur.room_id);
+      } else {
+        // Room was deleted, check if there are new messages after deleted_at
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('room_id', ur.room_id)
+          .gt('created_at', deletedAt);
+        
+        if (count && count > 0) {
+          // There are new messages, show the room
+          roomsToShow.push(ur.room_id);
+          console.log('[fetchRooms] Room', ur.room_id, 'has', count, 'new messages after deletion');
+        }
+      }
+    }
+    
+    const roomIds = roomsToShow;
+    console.log('[fetchRooms] Final room IDs to show:', roomIds);
 
     const { data: roomsData, error: roomDetailsError } = await supabase
       .from('rooms')
@@ -361,14 +396,23 @@ export async function fetchRooms(): Promise<RoomWithUser[]> {
 // Delete a chat room (soft delete - marks as deleted for this user only)
 export async function deleteRoomForUser(roomId: string, userId: string): Promise<boolean> {
   try {
+    console.log('[deleteRoomForUser] Deleting room:', roomId, 'for user:', userId);
+    
     // Mark the room as deleted for this user (soft delete)
     // This hides old messages but keeps the room for the other user
-    const { error } = await supabase
+    // Use upsert to handle cases where the entry already exists
+    const { data, error } = await supabase
       .from('deleted_rooms')
-      .insert({
+      .upsert({
         user_id: userId,
-        room_id: roomId
-      });
+        room_id: roomId,
+        deleted_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,room_id'
+      })
+      .select();
+
+    console.log('[deleteRoomForUser] Result:', data, 'Error:', error);
 
     if (error) throw error;
 
@@ -399,13 +443,9 @@ export async function getOrCreateChatWithFriend(userId: string, friendId: string
         if (members && members.length === 2) {
           const memberIds = members.map(m => m.user_id);
           if (memberIds.includes(userId) && memberIds.includes(friendId)) {
-            // Found existing room! Remove from deleted_rooms if it was deleted
-            await supabase
-              .from('deleted_rooms')
-              .delete()
-              .eq('user_id', userId)
-              .eq('room_id', room.id);
-
+            // Found existing room - just return it
+            // Don't modify deleted_at - let the user see any messages after the original deletion
+            // The fetchMessages function will filter based on the existing deleted_at
             return room.id;
           }
         }
