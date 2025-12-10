@@ -17,7 +17,7 @@ export default function ChatHeader({ roomName, avatarUrl, onBack, onVoiceCall, o
         {avatarUrl ? (
           <Image
             source={{ uri: avatarUrl }}
-            className="w-10 h-10 rounded-full mr-3"
+            style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
           />
         ) : (
           <View className="w-10 h-10 rounded-full bg-kin-slate items-center justify-center mr-3">

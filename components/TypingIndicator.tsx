@@ -42,7 +42,7 @@ export default function TypingIndicator({ isVisible, avatarUrl, userName }: Typi
         {avatarUrl ? (
           <Image 
             source={{ uri: avatarUrl }} 
-            className="w-8 h-8 rounded-full"
+            style={{ width: 32, height: 32, borderRadius: 16 }}
           />
         ) : (
           <View className="w-8 h-8 rounded-full bg-kin-slate items-center justify-center">

@@ -339,7 +339,7 @@ export default function ChatRoomScreen() {
               {item.profiles?.avatar_url ? (
                 <Image
                   source={{ uri: item.profiles.avatar_url }}
-                  className="w-8 h-8 rounded-full"
+                  style={{ width: 32, height: 32, borderRadius: 16 }}
                 />
               ) : (
                 <View className="w-8 h-8 rounded-full bg-kin-slate items-center justify-center">
