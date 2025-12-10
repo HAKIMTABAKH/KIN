@@ -75,6 +75,7 @@ export interface ChatInputProps {
 }
 export interface ChatHeaderProps {
   roomName: string;
+  avatarUrl?: string | null;
   onBack: () => void;
   onVoiceCall?: () => void;
   onVideoCall?: () => void;
@@ -122,6 +123,8 @@ export interface Message {
   reply_message?: {
     id: string;
     content: string;
+    media_url?: string | null;
+    media_type?: 'image' | 'video' | null;
     profiles?: {
       full_name?: string;
     };

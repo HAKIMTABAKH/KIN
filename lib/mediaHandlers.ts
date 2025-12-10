@@ -3,11 +3,11 @@
  * Business logic for media picking and uploading
  */
 
-import * as ExpoFS from 'expo-file-system/legacy'; 
+import { decode } from 'base64-arraybuffer';
+import * as ExpoFS from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
 import { supabase } from './supabase';
-import { decode } from 'base64-arraybuffer';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
@@ -75,7 +75,8 @@ export const uploadAndSendMedia = async (
   roomId: string,
   userId: string,
   setMessages: (updater: (prev: any[]) => any[]) => void,
-  setUploading: (uploading: boolean) => void
+  setUploading: (uploading: boolean) => void,
+  replyToId?: string | null
 ) => {
   if (!file || !userId) return;
 
@@ -96,6 +97,7 @@ export const uploadAndSendMedia = async (
     media_type: mediaType,
     reactions: {},
     profiles: null,
+    reply_to_id: replyToId,
   };
 
   setMessages((prev) => [tempMessage, ...prev]);
@@ -138,6 +140,7 @@ export const uploadAndSendMedia = async (
         user_id: userId,
         media_url: publicUrl,
         media_type: mediaType,
+        ...(replyToId && { reply_to_id: replyToId }),
       })
       .select('*, profiles(full_name, avatar_url)')
       .single();

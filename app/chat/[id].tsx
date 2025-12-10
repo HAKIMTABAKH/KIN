@@ -17,7 +17,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { AlertCircle, ArrowDownFromLine, Clock, X } from 'lucide-react-native';
+import { AlertCircle, ArrowDownFromLine, Clock, Play, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -70,6 +70,7 @@ export default function ChatRoomScreen() {
   const [showScrollButton, setShowScrollButton] = useState(false); // Show scroll to bottom button
   const [blockStatus, setBlockStatus] = useState<'none' | 'blocked_by_me' | 'blocked_me'>('none');
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(null); // Other user's avatar
   const [uploading, setUploading] = useState(false); // Media upload state
   const [uploadProgress, setUploadProgress] = useState(0); // Upload progress percentage
   const [selectedMedia, setSelectedMedia] = useState<ImagePicker.ImagePickerAsset | null>(null); // Selected media for preview
@@ -108,14 +109,15 @@ export default function ChatRoomScreen() {
     if (!selectedMedia || !currentUserId) return;
 
     setShowMediaPreview(false);
-    await uploadAndSendMedia(selectedMedia, id, currentUserId, setMessages, setUploading);
+    await uploadAndSendMedia(selectedMedia, id, currentUserId, setMessages, setUploading, replyingTo?.id || null);
     setSelectedMedia(null);
+    setReplyingTo(null); // Clear reply after sending
   };
 
 
 
   useEffect(() => {
-    setupRoom(id, setCurrentUserId, setRoomName, setMessages, setLoading, router);
+    setupRoom(id, setCurrentUserId, setRoomName, setMessages, setLoading, router, setOtherUserAvatar);
 
     // Mark existing messages as read when entering the room
     if (currentUserId) {
@@ -349,124 +351,140 @@ export default function ChatRoomScreen() {
             </TouchableOpacity>
           )}
 
-          <View className={`flex-shrink ${isMe ? 'items-end' : ''}`}>
-            <TouchableOpacity
-              onLongPress={() => handleLongPress(item, setSelectedMessage)}
-              delayLongPress={300}
-              activeOpacity={0.8}
-            >
-              {/* Name Label (Them only) */}
-              {!isMe && !onlyEmojis && (
-                <Text className="text-kin-mist text-xs font-outfit mb-1 ml-1">
-                  {item.profiles?.full_name || 'User'}
-                </Text>
-              )}
+          <View className={`flex-shrink ${isMe ? 'items-end' : 'items-start'}`}>
+            {/* Name Label (Them only) */}
+            {!isMe && !onlyEmojis && (
+              <Text className="text-kin-mist text-xs font-outfit mb-1 ml-1">
+                {item.profiles?.full_name || 'User'}
+              </Text>
+            )}
 
-              {/* THE BUBBLE */}
-              <View
-                className={`
-              relative ${hasReactions ? 'mb-8' : 'mb-1'}
-              ${onlyEmojis || hasMedia ? 'bg-transparent px-0 py-0' : 'px-4 py-3 rounded-2xl'}
-              ${!onlyEmojis && !hasMedia && isMe ? 'bg-kin-amber rounded-tr-sm' : ''}
-              ${!onlyEmojis && !hasMedia && !isMe ? 'bg-kin-midnight border border-kin-slate rounded-tl-sm' : ''}
-              ${isFlashing && !onlyEmojis && !hasMedia ? (isMe ? 'opacity-70' : 'bg-kin-slate/50') : ''}
-              ${isSending || isUploading ? 'opacity-70' : 'opacity-100'}
-            `}
-                style={{
-                  alignSelf: 'flex-start'
-                }}
+            {/* REPLY PREVIEW - OUTSIDE THE BUBBLE (Fixed width for consistency) */}
+            {replyData && (
+              <TouchableOpacity
+                onPress={() => scrollToMessage(replyData.id, messages, flatListRef, setFlashMessageId)}
+                activeOpacity={0.7}
+                className="mb-1 rounded-xl overflow-hidden flex-row w-[200px]"
               >
-                {/* REPLY PREVIEW - Instagram/Messenger Style */}
-                {replyData && !onlyEmojis && (
-                  <TouchableOpacity
-                    onPress={() => scrollToMessage(replyData.id, messages, flatListRef, setFlashMessageId)}
-                    activeOpacity={0.7}
-                    className={`mb-2.5 px-3 py-2 rounded-xl border-l-[3px] ${isMe
-                        ? 'bg-black/15 border-black/30'
-                        : 'bg-kin-amber/10 border-kin-amber'
-                      }`}
+                {/* Left: Text Content with Border */}
+                <View className={`flex-1 py-2 pl-3 pr-2 border-l-[3px] justify-center ${isMe ? 'border-kin-amber/50' : 'border-kin-amber'}`}>
+                  <Text className={`text-[10px] font-outfit-bold mb-0.5 ${isMe ? 'text-kin-mist/70' : 'text-kin-amber'}`}>
+                    {replyData.profiles?.full_name || 'User'}
+                  </Text>
+                  <Text
+                    className={`text-[11px] text-kin-mist/80`}
+                    numberOfLines={1}
                   >
-                    <Text className={`text-[11px] font-outfit-bold mb-1 ${isMe ? 'text-black/80' : 'text-kin-amber'
-                      }`}>
-                      {replyData.profiles?.full_name || 'User'}
-                    </Text>
-                    <Text
-                      className={`text-xs leading-4 ${isMe ? 'text-black/70' : 'text-kin-mist/90'}`}
-                      numberOfLines={2}
-                    >
-                      {replyData.content}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                    {replyData.content || (replyData.media_type === 'video' ? '📹 Video' : replyData.media_type === 'image' ? '📷 Photo' : 'Message')}
+                  </Text>
+                </View>
 
-                {/* MEDIA CONTENT (Image/Video) - New Component */}
-                {hasMedia && (
-                  <View className="relative rounded-xl overflow-hidden">
-                    <ChatMedia
-                      uri={(item as any).media_url}
-                      type={mediaType || 'image'}
+                {/* Right: Media Thumbnail */}
+                {replyData.media_url && (
+                  <View className="w-12 h-12 rounded-md overflow-hidden bg-kin-slate/20">
+                    <Image
+                      source={{ uri: replyData.media_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
                     />
-
-                    {/* Upload Progress Overlay */}
-                    {isUploading && (
-                      <View className="absolute inset-0 bg-black/60 items-center justify-center rounded-xl">
-                        <ActivityIndicator size="large" color="#F59E0B" />
-                        <Text className="text-white text-xs font-outfit-medium mt-2">Uploading...</Text>
+                    {/* Video Icon Overlay */}
+                    {replyData.media_type === 'video' && (
+                      <View className="absolute inset-0 items-center justify-center bg-black/40">
+                        <Play size={14} color="white" fill="white" />
                       </View>
                     )}
                   </View>
                 )}
+              </TouchableOpacity>
+            )}
 
-                {/* TEXT CONTENT (with bubble if media exists) */}
-                {item.content && !onlyEmojis && (
-                  <View className={hasMedia ? `mt-2 px-4 py-3 rounded-2xl ${isMe ? 'bg-kin-amber rounded-tr-sm' : 'bg-kin-midnight border border-kin-slate rounded-tl-sm'}` : ''}>
-                    <Text
-                      className={`font-outfit text-base
-                    ${!onlyEmojis && isMe ? 'text-black font-outfit-medium' : 'text-kin-white'}
-                  `}
-                    >
+            {/* Wrapper for bubble and reactions positioning */}
+            <View className="relative">
+              <TouchableOpacity
+                onLongPress={() => handleLongPress(item, setSelectedMessage)}
+                delayLongPress={300}
+                activeOpacity={0.8}
+              >
+                {/* THE BUBBLE - ONLY FOR ACTUAL MESSAGE CONTENT */}
+                <View
+                  className={`
+                ${hasReactions ? 'mb-6' : 'mb-1'}
+                ${onlyEmojis || hasMedia ? 'bg-transparent px-0 py-0' : 'px-4 py-3 rounded-2xl'}
+                ${!onlyEmojis && !hasMedia && isMe ? 'bg-kin-amber rounded-tr-sm' : ''}
+                ${!onlyEmojis && !hasMedia && !isMe ? 'bg-kin-midnight border border-kin-slate rounded-tl-sm' : ''}
+                ${isFlashing && !onlyEmojis && !hasMedia ? (isMe ? 'opacity-70' : 'bg-kin-slate/50') : ''}
+                ${isSending || isUploading ? 'opacity-70' : 'opacity-100'}
+              `}
+                >
+                  {/* MEDIA CONTENT (Image/Video) */}
+                  {hasMedia && (
+                    <View className="relative rounded-xl overflow-hidden">
+                      <ChatMedia
+                        uri={(item as any).media_url}
+                        type={mediaType || 'image'}
+                      />
+
+                      {/* Upload Progress Overlay */}
+                      {isUploading && (
+                        <View className="absolute inset-0 bg-black/60 items-center justify-center rounded-xl">
+                          <ActivityIndicator size="large" color="#F59E0B" />
+                          <Text className="text-white text-xs font-outfit-medium mt-2">Uploading...</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* TEXT CONTENT (with bubble if media exists) */}
+                  {item.content && !onlyEmojis && (
+                    <View className={hasMedia ? `mt-2 px-4 py-3 rounded-2xl ${isMe ? 'bg-kin-amber rounded-tr-sm' : 'bg-kin-midnight border border-kin-slate rounded-tl-sm'}` : ''}>
+                      <Text
+                        className={`font-outfit text-base
+                      ${!onlyEmojis && isMe ? 'text-black font-outfit-medium' : 'text-kin-white'}
+                    `}
+                      >
+                        {item.content}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* EMOJI ONLY CONTENT */}
+                  {onlyEmojis && (
+                    <Text className="text-3xl font-outfit">
                       {item.content}
                     </Text>
-                  </View>
-                )}
+                  )}
+                </View>
+              </TouchableOpacity>
 
-                {/* EMOJI ONLY CONTENT */}
-                {onlyEmojis && (
-                  <Text className="text-3xl font-outfit">
-                    {item.content}
-                  </Text>
-                )}
+              {/* REACTIONS PILL - Positioned relative to wrapper */}
+              {hasReactions && (
+                <TouchableOpacity
+                  onPress={() => handleLongPress(item, setSelectedMessage)}
+                  className={`
+                absolute -bottom-4
+                ${isMe ? 'right-0' : 'left-0'}
+                bg-[#2D3246] rounded-full px-2 py-1 flex-row items-center border-2 border-kin-charcoal shadow-sm z-10
+              `}
+                >
+                  {Object.entries(reactions).map(([emoji, users]) => {
+                    const userList = users as string[];
+                    const count = userList.length;
 
-                {/* REACTIONS PILL */}
-                {hasReactions && (
-                  <TouchableOpacity
-                    onPress={() => handleLongPress(item, setSelectedMessage)}
-                    className={`
-                  absolute -bottom-5
-                  ${isMe ? 'right-0' : 'left-0'}
-                  bg-[#2D3246] rounded-full px-2 py-1 flex-row items-center border-2 border-kin-charcoal shadow-sm z-10
-                `}
-                  >
-                    {Object.entries(reactions).map(([emoji, users]) => {
-                      const userList = users as string[];
-                      const count = userList.length;
-
-                      return (
-                        <View key={emoji} className="flex-row items-center mr-1">
-                          <Text className="text-xs">{emoji}</Text>
-                          {count > 1 && (
-                            <Text className="text-[10px] text-kin-white ml-0.5 font-outfit-bold">{count}</Text>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </TouchableOpacity>
-                )}
-              </View>
-            </TouchableOpacity>
+                    return (
+                      <View key={emoji} className="flex-row items-center mr-1">
+                        <Text className="text-xs">{emoji}</Text>
+                        {count > 1 && (
+                          <Text className="text-[10px] text-kin-white ml-0.5 font-outfit-bold">{count}</Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* STATUS INDICATORS (Sending/Error/Read) - Show for ALL messages */}
-            <View className={`flex-row items-center gap-1 ${hasReactions ? 'mt-2' : 'mt-1'}`}>
+            <View className={`flex-row items-center gap-1 ${hasReactions ? 'mt-1' : 'mt-1'}`}>
 
               {/* Sending Icon */}
               {isSending && (
@@ -503,6 +521,7 @@ export default function ChatRoomScreen() {
     <SafeAreaView className="flex-1 bg-kin-charcoal" edges={['top', 'left', 'right']}>
       <ChatHeader
         roomName={roomName}
+        avatarUrl={otherUserAvatar}
         onBack={() => router.back()}
         onVoiceCall={() => console.log('Voice call')}
         onVideoCall={() => console.log('Video call')}
@@ -567,18 +586,52 @@ export default function ChatRoomScreen() {
 
         {/* Reply Preview Box */}
         {replyingTo && (
-          <View className="bg-kin-midnight px-4 py-2 border-t border-kin-slate/30 flex-row justify-between items-center">
-            <View className="border-l-4 border-kin-amber pl-3 flex-1">
-              <Text className="text-kin-amber text-xs font-outfit-bold mb-1">
-                Replying to {replyingTo.profiles?.full_name || 'User'}
-              </Text>
-              <Text className="text-kin-mist text-xs font-outfit" numberOfLines={1}>
-                {replyingTo.content}
-              </Text>
+          <View className="bg-kin-midnight px-4 py-2 border-t border-kin-slate/30">
+            <View className="bg-kin-slate/30 rounded-xl overflow-hidden flex-row">
+              {/* Left: Text Content with Border */}
+              <View className="flex-1 py-2 pl-3 pr-2 border-l-[4px] border-kin-amber justify-center">
+                <Text className="text-kin-amber text-xs font-outfit-bold mb-0.5">
+                  Replying to {replyingTo.profiles?.full_name || 'User'}
+                </Text>
+                <Text className="text-kin-mist text-xs font-outfit" numberOfLines={1}>
+                  {(replyingTo as any).content || ((replyingTo as any).media_type === 'video' ? '📹 Video' : (replyingTo as any).media_type === 'image' ? '📷 Photo' : 'Message')}
+                </Text>
+              </View>
+
+              {/* Right: Media Thumbnail or Close Button */}
+              {(replyingTo as any).media_url ? (
+                <View className="relative">
+                  <View className="w-14 h-14 bg-black/10">
+                    <Image
+                      source={{ uri: (replyingTo as any).media_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                    />
+                    {/* Video Icon Overlay */}
+                    {(replyingTo as any).media_type === 'video' && (
+                      <View className="absolute inset-0 items-center justify-center bg-black/30">
+                        <Play size={16} color="white" fill="white" />
+                      </View>
+                    )}
+                  </View>
+                  {/* Close button on top of thumbnail */}
+                  <TouchableOpacity 
+                    onPress={() => setReplyingTo(null)}
+                    className="absolute -top-1 -right-1 bg-kin-charcoal rounded-full p-1"
+                    style={{ elevation: 3 }}
+                  >
+                    <X color="#9CA3AF" size={14} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  onPress={() => setReplyingTo(null)}
+                  className="w-14 h-14 items-center justify-center"
+                >
+                  <X color="#9CA3AF" size={20} />
+                </TouchableOpacity>
+              )}
             </View>
-            <TouchableOpacity onPress={() => setReplyingTo(null)}>
-              <X color="#9CA3AF" size={20} />
-            </TouchableOpacity>
           </View>
         )}
 
@@ -662,7 +715,9 @@ export default function ChatRoomScreen() {
           <View className="bg-kin-charcoal rounded-t-3xl pb-8">
             {/* Header */}
             <View className="flex-row items-center justify-between px-6 py-4 border-b border-kin-slate/30">
-              <Text className="text-kin-white text-lg font-outfit-bold">Send Media</Text>
+              <Text className="text-kin-white text-lg font-outfit-bold">
+                {replyingTo ? 'Reply with Media' : 'Send Media'}
+              </Text>
               <TouchableOpacity
                 onPress={() => {
                   setShowMediaPreview(false);
@@ -672,6 +727,34 @@ export default function ChatRoomScreen() {
                 <X color="#9CA3AF" size={24} />
               </TouchableOpacity>
             </View>
+
+            {/* Reply Indicator */}
+            {replyingTo && (
+              <View className="mx-6 mt-4 bg-kin-slate/30 rounded-xl overflow-hidden flex-row">
+                <View className="flex-1 py-2 pl-3 pr-2 border-l-[4px] border-kin-amber justify-center">
+                  <Text className="text-kin-amber text-xs font-outfit-bold mb-0.5">
+                    Replying to {replyingTo.profiles?.full_name || 'User'}
+                  </Text>
+                  <Text className="text-kin-mist text-xs font-outfit" numberOfLines={1}>
+                    {(replyingTo as any).content || ((replyingTo as any).media_type === 'video' ? '📹 Video' : (replyingTo as any).media_type === 'image' ? '📷 Photo' : 'Message')}
+                  </Text>
+                </View>
+                {(replyingTo as any).media_url && (
+                  <View className="w-12 h-12 rounded-md overflow-hidden bg-kin-slate/20">
+                    <Image
+                      source={{ uri: (replyingTo as any).media_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                    />
+                    {(replyingTo as any).media_type === 'video' && (
+                      <View className="absolute inset-0 items-center justify-center bg-black/40">
+                        <Play size={14} color="white" fill="white" />
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Media Preview */}
             <View className="px-6 py-6 items-center">

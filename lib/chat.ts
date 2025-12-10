@@ -62,7 +62,7 @@ export async function fetchMessages(roomId: string) {
     if (replyIds.length > 0) {
       const { data: replies } = await supabase
         .from('messages')
-        .select('id, content, profiles(full_name)')
+        .select('id, content, media_url, media_type, profiles(full_name)')
         .in('id', replyIds);
 
       // Create a map for quick lookup
@@ -107,7 +107,7 @@ export async function fetchMessageById(messageId: string) {
     if (data.reply_to_id) {
       const { data: reply } = await supabase
         .from('messages')
-        .select('id, content, profiles(full_name)')
+        .select('id, content, media_url, media_type, profiles(full_name)')
         .eq('id', data.reply_to_id)
         .single();
       
