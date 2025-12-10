@@ -96,6 +96,26 @@ export default function ChatRoomScreen() {
     if (error) console.error('Error marking read:', error);
   };
 
+  // Open media viewer
+  const openMediaViewer = (item: Message) => {
+    const mediaUrl = (item as any).media_url;
+    if (!mediaUrl) return;
+
+    router.push({
+      pathname: '/(app)/media-viewer',
+      params: {
+        uri: mediaUrl,
+        type: (item as any).media_type || 'image',
+        userName: item.profiles?.full_name || 'User',
+        avatar: item.profiles?.avatar_url || '',
+        timestamp: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        // NEW PARAMS NEEDED FOR REPLY:
+        messageId: item.id,
+        roomId: id,
+      }
+    });
+  };
+
   // Handle media picking
   const handlePickMedia = (mode: 'library' | 'camera') => {
     pickMedia(mode, (file) => {
@@ -422,6 +442,7 @@ export default function ChatRoomScreen() {
                       <ChatMedia
                         uri={(item as any).media_url}
                         type={mediaType || 'image'}
+                        onPress={() => openMediaViewer(item)}
                       />
 
                       {/* Upload Progress Overlay */}
