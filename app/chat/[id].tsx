@@ -133,7 +133,7 @@ export default function ChatRoomScreen() {
           table: 'messages',
           filter: `room_id=eq.${id}`,
         },
-        async (payload) => {
+        async (payload: any) => {
           if (payload.eventType === 'INSERT') {
             // Use the helper function that handles reply data correctly
             const { data } = await fetchMessageById(payload.new.id);
