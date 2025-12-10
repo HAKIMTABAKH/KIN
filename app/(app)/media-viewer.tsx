@@ -1,39 +1,54 @@
 import VideoControls from '@/components/VideoControls';
 import { downloadMedia, sendMediaReply } from '@/lib/mediaViewerHelpers';
+import { supabase } from '@/lib/supabase';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Camera, Download, X } from 'lucide-react-native';
-import { useState } from 'react';
+import { Camera, ChevronLeft, ChevronRight, Download, X } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
-    Extrapolation,
-    interpolate,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width, height } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
+
+type MediaItem = {
+  id: string;
+  media_url: string;
+  media_type: 'image' | 'video';
+  created_at: string;
+  user_id: string;
+  profiles?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+};
 
 export default function MediaViewerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const flatListRef = useRef<FlatList>(null);
+  const { width, height } = useWindowDimensions();
 
-  // Params
   const uri = params.uri as string;
   const type = params.type as string;
   const userName = params.userName as string;
@@ -42,54 +57,116 @@ export default function MediaViewerScreen() {
   const messageId = params.messageId as string;
   const roomId = params.roomId as string;
 
-  // State
   const [saving, setSaving] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
-  const [showControls, setShowControls] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loadingGallery, setLoadingGallery] = useState(true);
 
-  // Animation Values
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-  // Video Setup
-  const player = type === 'video' ? useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.play();
-  }) : null;
 
-  const togglePlay = () => {
-    if (!player) return;
-    player.playing ? player.pause() : player.play();
-  };
+  useEffect(() => {
+    async function fetchAllMedia() {
+      if (!roomId) {
+        setMediaItems([{
+          id: messageId || '1',
+          media_url: uri,
+          media_type: type as 'image' | 'video',
+          created_at: new Date().toISOString(),
+          user_id: '',
+          profiles: { full_name: userName, avatar_url: avatar }
+        }]);
+        setLoadingGallery(false);
+        return;
+      }
 
-  // Gesture Handlers
-  const toggleFocusMode = () => {
-    setFocusMode(!focusMode);
-    setShowControls(focusMode);
-  };
+      const { data } = await supabase
+        .from('messages')
+        .select('id, media_url, media_type, created_at, user_id, profiles(full_name, avatar_url)')
+        .eq('room_id', roomId)
+        .not('media_url', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        const items = data.map(item => ({
+          ...item,
+          profiles: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles
+        })) as MediaItem[];
+        setMediaItems(items);
+        const idx = items.findIndex(item => item.id === messageId || item.media_url === uri);
+        if (idx !== -1) {
+          setCurrentIndex(idx);
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+          }, 100);
+        }
+      } else {
+        setMediaItems([{
+          id: messageId || '1',
+          media_url: uri,
+          media_type: type as 'image' | 'video',
+          created_at: new Date().toISOString(),
+          user_id: '',
+          profiles: { full_name: userName, avatar_url: avatar }
+        }]);
+      }
+      setLoadingGallery(false);
+    }
+    fetchAllMedia();
+  }, [roomId, messageId, uri]);
+
+  const currentItem = mediaItems[currentIndex];
+  const currentUri = currentItem?.media_url || uri;
+  const currentUserName = currentItem?.profiles?.full_name || userName;
+  const currentAvatar = currentItem?.profiles?.avatar_url || avatar;
 
   const goBack = () => router.back();
+  const toggleFocusMode = () => setFocusMode(!focusMode);
 
-  const singleTap = Gesture.Tap()
-    .onEnd(() => toggleFocusMode())
-    .runOnJS(true);
+  const goToPrevious = () => {
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      setCurrentIndex(newIndex);
+      flatListRef.current?.scrollToIndex({ index: newIndex, animated: true });
+    }
+  };
 
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      scale.value = scale.value > 1 ? withSpring(1) : withSpring(2);
-    });
+  const goToNext = () => {
+    if (currentIndex < mediaItems.length - 1) {
+      const newIndex = currentIndex + 1;
+      setCurrentIndex(newIndex);
+      flatListRef.current?.scrollToIndex({ index: newIndex, animated: true });
+    }
+  };
 
+  useEffect(() => {
+    if (!isWeb) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goToPrevious();
+      if (e.key === 'ArrowRight') goToNext();
+      if (e.key === 'Escape') goBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, mediaItems.length]);
+
+  const singleTap = Gesture.Tap().onEnd(() => toggleFocusMode()).runOnJS(true);
+  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(() => {
+    scale.value = scale.value > 1 ? withSpring(1) : withSpring(2);
+  });
   const pinchGesture = Gesture.Pinch()
     .onStart(() => { savedScale.value = scale.value; })
     .onUpdate((e) => { scale.value = savedScale.value * e.scale; })
     .onEnd(() => { if (scale.value < 1) scale.value = withSpring(1); });
-
   const panGesture = Gesture.Pan()
     .averageTouches(true)
+    .activeOffsetY([-10, 10])
+    .failOffsetX([-20, 20])
     .onUpdate((e) => {
       if (scale.value > 1.1) return;
       if (e.translationY > 0) translateY.value = e.translationY;
@@ -101,46 +178,61 @@ export default function MediaViewerScreen() {
     })
     .runOnJS(true);
 
-  const composedGestures = Gesture.Simultaneous(
-    panGesture,
-    pinchGesture,
-    Gesture.Exclusive(doubleTap, singleTap)
-  );
+  const composedGestures = Gesture.Simultaneous(pinchGesture, Gesture.Exclusive(doubleTap, singleTap));
 
-  // Animated Styles
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: translateY.value },
-      { scale: scale.value <= 1 
-        ? interpolate(translateY.value, [0, height], [1, 0.8], Extrapolation.CLAMP) 
-        : scale.value 
-      }
+      { scale: scale.value <= 1 ? interpolate(translateY.value, [0, height], [1, 0.8], Extrapolation.CLAMP) : scale.value }
     ],
     borderRadius: interpolate(translateY.value, [0, 200], [0, 20], Extrapolation.CLAMP),
-    overflow: 'hidden',
+    overflow: 'hidden' as const,
   }));
 
   const uiStyle = useAnimatedStyle(() => ({
     opacity: interpolate(translateY.value, [0, 100], [1, 0], Extrapolation.CLAMP),
   }));
 
-  // Actions
-  const handleDownload = () => {
-    downloadMedia(uri, () => setSaving(true), () => setSaving(false));
-  };
+  const handleDownload = () => downloadMedia(currentUri, () => setSaving(true), () => setSaving(false));
 
   const handleSendReply = async () => {
     setSending(true);
-    await sendMediaReply(replyText, roomId, messageId, () => {
+    await sendMediaReply(replyText, roomId, currentItem?.id || messageId, () => {
       setReplyText('');
       router.back();
     });
     setSending(false);
   };
 
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0 && viewableItems[0].index !== undefined) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+
+  const renderMediaItem = ({ item }: { item: MediaItem }) => (
+    <View style={{ width, height: '100%', justifyContent: 'center', alignItems: 'center' }}>
+      {item.media_type === 'video' ? (
+        <VideoItem uri={item.media_url} isActive={item.id === currentItem?.id} width={width} />
+      ) : (
+        <Image source={{ uri: item.media_url }} style={{ width, height: '100%' }} contentFit="contain" />
+      )}
+    </View>
+  );
+
+  if (loadingGallery) {
+    return (
+      <View className="flex-1 bg-black justify-center items-center">
+        <ActivityIndicator color="#F59E0B" size="large" />
+      </View>
+    );
+  }
+
+
   return (
     <GestureHandlerRootView className="flex-1">
-      {/* Background */}
       {!focusMode ? (
         <>
           <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
@@ -151,7 +243,6 @@ export default function MediaViewerScreen() {
       )}
 
       <SafeAreaView className="flex-1">
-        {/* Header */}
         {!focusMode && (
           <Animated.View className="flex-row justify-between px-4 py-2 z-[60]" style={uiStyle}>
             <View className="flex-row items-center">
@@ -159,14 +250,16 @@ export default function MediaViewerScreen() {
                 <X color="white" size={26} />
               </TouchableOpacity>
               <View className="flex-row items-center">
-                <Image 
-                  source={{ uri: avatar || 'https://i.pravatar.cc/150' }} 
+                <Image
+                  source={{ uri: currentAvatar || 'https://i.pravatar.cc/150' }}
                   style={{ width: 32, height: 32, borderRadius: 16 }}
                   className="bg-kin-slate"
                 />
                 <View className="ml-2.5">
-                  <Text className="text-white font-outfit-bold text-base">{userName}</Text>
-                  <Text className="text-kin-mist text-xs">{timestamp}</Text>
+                  <Text className="text-white font-outfit-bold text-base">{currentUserName}</Text>
+                  <Text className="text-kin-mist text-xs">
+                    {mediaItems.length > 1 ? `${currentIndex + 1} of ${mediaItems.length}` : timestamp}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -176,38 +269,56 @@ export default function MediaViewerScreen() {
           </Animated.View>
         )}
 
-        {/* Content */}
-        <View className="flex-1 z-10">
-          <GestureDetector gesture={composedGestures}>
-            <Animated.View className="flex-1 justify-center items-center" style={animatedStyle}>
-              {type === 'video' && player ? (
-                <View style={{ width, height: '100%' }}>
-                  <VideoView
-                    player={player}
-                    style={{ width: '100%', height: '100%' }}
-                    contentFit="contain"
-                    nativeControls={false}
-                  />
-                </View>
-              ) : (
-                <Image source={{ uri }} style={{ width, height: '100%' }} contentFit="contain" />
-              )}
-            </Animated.View>
-          </GestureDetector>
-        </View>
-
-        {/* Video Controls */}
-        {type === 'video' && player && !focusMode && (
-          <Animated.View className="absolute inset-0 z-50" style={uiStyle} pointerEvents="box-none">
-            <VideoControls player={player} visible={showControls} onTogglePlay={togglePlay} />
+        <GestureDetector gesture={panGesture}>
+          <Animated.View className="flex-1 z-10" style={animatedStyle}>
+            <GestureDetector gesture={composedGestures}>
+              <View className="flex-1">
+                <FlatList
+                  ref={flatListRef}
+                  data={mediaItems}
+                  renderItem={renderMediaItem}
+                  keyExtractor={(item) => item.id}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={viewabilityConfig}
+                  initialScrollIndex={currentIndex > 0 ? currentIndex : undefined}
+                  getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+                  onScrollToIndexFailed={(info) => {
+                    setTimeout(() => {
+                      flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                    }, 100);
+                  }}
+                />
+              </View>
+            </GestureDetector>
           </Animated.View>
+        </GestureDetector>
+
+        {isWeb && !focusMode && mediaItems.length > 1 && (
+          <View className="absolute inset-y-0 left-0 right-0 flex-row justify-between items-center px-4 z-50" pointerEvents="box-none">
+            <TouchableOpacity
+              onPress={goToPrevious}
+              disabled={currentIndex === 0}
+              className={`bg-black/50 p-3 rounded-full ${currentIndex === 0 ? 'opacity-30' : ''}`}
+            >
+              <ChevronLeft color="white" size={30} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={goToNext}
+              disabled={currentIndex === mediaItems.length - 1}
+              className={`bg-black/50 p-3 rounded-full ${currentIndex === mediaItems.length - 1 ? 'opacity-30' : ''}`}
+            >
+              <ChevronRight color="white" size={30} />
+            </TouchableOpacity>
+          </View>
         )}
 
-        {/* Footer */}
         {!focusMode && (
           <Animated.View className="z-[60]" style={uiStyle}>
-            <KeyboardAvoidingView 
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
               keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
             >
               <View className="px-4 pb-4 pt-2">
@@ -240,5 +351,35 @@ export default function MediaViewerScreen() {
         )}
       </SafeAreaView>
     </GestureHandlerRootView>
+  );
+}
+
+function VideoItem({ uri, isActive, width }: { uri: string; isActive: boolean; width: number }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    if (isActive) p.play();
+  });
+
+  useEffect(() => {
+    if (isActive) player?.play();
+    else player?.pause();
+  }, [isActive]);
+
+  if (!player) return null;
+
+  return (
+    <View style={{ width, height: '100%' }}>
+      <VideoView
+        player={player}
+        style={{ width: '100%', height: '100%' }}
+        contentFit="contain"
+        nativeControls={isWeb}
+      />
+      {!isWeb && (
+        <VideoControls player={player} visible={true} onTogglePlay={() => {
+          player.playing ? player.pause() : player.play();
+        }} />
+      )}
+    </View>
   );
 }

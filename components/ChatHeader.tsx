@@ -7,7 +7,7 @@ import { ArrowLeft, Phone, Video } from 'lucide-react-native';
 import { Text, TouchableOpacity, View } from 'react-native';
 
 
-export default function ChatHeader({ roomName, avatarUrl, userId, lastSeen, onBack, onVoiceCall, onVideoCall }: ChatHeaderProps) {
+export default function ChatHeader({ roomName, avatarUrl, userId, lastSeen, onBack, onProfilePress, onVoiceCall, onVideoCall }: ChatHeaderProps) {
   const { onlineUsers } = usePresence();
   const isOnline = userId ? onlineUsers.has(userId) : false;
 
@@ -19,34 +19,41 @@ export default function ChatHeader({ roomName, avatarUrl, userId, lastSeen, onBa
           <ArrowLeft color="#F59E0B" size={24} />
         </TouchableOpacity>
         
-        {/* Profile Avatar with Presence */}
-        {userId ? (
-          <View className="mr-3">
-            <UserAvatar
-              userId={userId}
-              avatarUrl={avatarUrl}
-              size={40}
+        {/* Clickable Profile Area */}
+        <TouchableOpacity 
+          className="flex-row items-center flex-1"
+          activeOpacity={0.7}
+          onPress={onProfilePress}
+        >
+          {/* Profile Avatar with Presence */}
+          {userId ? (
+            <View className="mr-3">
+              <UserAvatar
+                userId={userId}
+                avatarUrl={avatarUrl}
+                size={40}
+              />
+            </View>
+          ) : avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
             />
-          </View>
-        ) : avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
-          />
-        ) : (
-          <View className="w-10 h-10 rounded-full bg-kin-slate items-center justify-center mr-3">
-            <Text className="text-kin-white text-sm font-outfit-bold">
-              {roomName.charAt(0).toUpperCase()}
+          ) : (
+            <View className="w-10 h-10 rounded-full bg-kin-slate items-center justify-center mr-3">
+              <Text className="text-kin-white text-sm font-outfit-bold">
+                {roomName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          
+          <View>
+            <Text className="text-kin-white font-outfit-bold text-lg">{roomName}</Text>
+            <Text className={`font-outfit text-xs ${isOnline ? 'text-green-500' : 'text-kin-mist'}`}>
+              {isOnline ? 'Online' : formatLastSeen(lastSeen)}
             </Text>
           </View>
-        )}
-        
-        <View>
-          <Text className="text-kin-white font-outfit-bold text-lg">{roomName}</Text>
-          <Text className={`font-outfit text-xs ${isOnline ? 'text-green-500' : 'text-kin-mist'}`}>
-            {isOnline ? 'Online' : formatLastSeen(lastSeen)}
-          </Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Right Section: Call Buttons */}

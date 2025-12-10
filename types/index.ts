@@ -79,7 +79,9 @@ export interface ChatHeaderProps {
   avatarUrl?: string | null;
   userId?: string | null;
   lastSeen?: string | null;
+  roomId?: string;
   onBack: () => void;
+  onProfilePress?: () => void;
   onVoiceCall?: () => void;
   onVideoCall?: () => void;
 }

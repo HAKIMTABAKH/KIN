@@ -1,6 +1,7 @@
 import ChatHeader from '@/components/ChatHeader';
 import ChatInput from '@/components/ChatInput';
 import ChatMedia from '@/components/ChatMedia';
+import LinkText from '@/components/LinkText';
 import MessageMenu from '@/components/MessageMenu';
 import TypingIndicator from '@/components/TypingIndicator';
 import { fetchMessageById, Message } from '@/lib/chat';
@@ -495,13 +496,14 @@ export default function ChatRoomScreen() {
                   {/* TEXT CONTENT (with bubble if media exists) */}
                   {item.content && !onlyEmojis && (
                     <View className={hasMedia ? `mt-2 px-4 py-3 rounded-2xl ${isMe ? 'bg-kin-amber rounded-tr-sm' : 'bg-kin-midnight border border-kin-slate rounded-tl-sm'}` : ''}>
-                      <Text
+                      <LinkText
                         className={`font-outfit text-base
                       ${!onlyEmojis && isMe ? 'text-black font-outfit-medium' : 'text-kin-white'}
                     `}
+                        linkColor={isMe ? '#1E40AF' : '#60A5FA'}
                       >
                         {item.content}
-                      </Text>
+                      </LinkText>
                     </View>
                   )}
 
@@ -583,6 +585,14 @@ export default function ChatRoomScreen() {
         userId={otherUserId}
         lastSeen={otherUserLastSeen}
         onBack={() => router.back()}
+        onProfilePress={() => {
+          if (otherUserId) {
+            router.push({
+              pathname: '/(app)/chat-details',
+              params: { roomId: id, odataId: otherUserId }
+            });
+          }
+        }}
         onVoiceCall={() => console.log('Voice call')}
         onVideoCall={() => console.log('Video call')}
       />
