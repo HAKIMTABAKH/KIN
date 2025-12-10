@@ -75,6 +75,7 @@ export default function ChatRoomScreen() {
   const [uploadProgress, setUploadProgress] = useState(0); // Upload progress percentage
   const [selectedMedia, setSelectedMedia] = useState<ImagePicker.ImagePickerAsset | null>(null); // Selected media for preview
   const [showMediaPreview, setShowMediaPreview] = useState(false); // Show media preview bottom sheet
+  const [mediaError, setMediaError] = useState<string | null>(null); // Media error message
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To clear the bubble
   const myTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To throttle my sending
@@ -118,10 +119,19 @@ export default function ChatRoomScreen() {
 
   // Handle media picking
   const handlePickMedia = (mode: 'library' | 'camera') => {
-    pickMedia(mode, (file) => {
-      setSelectedMedia(file);
-      setShowMediaPreview(true);
-    });
+    setMediaError(null); // Clear previous error
+    pickMedia(
+      mode, 
+      (file) => {
+        setSelectedMedia(file);
+        setShowMediaPreview(true);
+      },
+      (error) => {
+        setMediaError(error);
+        // Auto-clear error after 5 seconds
+        setTimeout(() => setMediaError(null), 5000);
+      }
+    );
   };
 
   // Handle send from preview
@@ -129,9 +139,21 @@ export default function ChatRoomScreen() {
     if (!selectedMedia || !currentUserId) return;
 
     setShowMediaPreview(false);
-    await uploadAndSendMedia(selectedMedia, id, currentUserId, setMessages, setUploading, replyingTo?.id || null);
+    setMediaError(null);
+    await uploadAndSendMedia(
+      selectedMedia, 
+      id, 
+      currentUserId, 
+      setMessages, 
+      setUploading, 
+      replyingTo?.id || null,
+      (error) => {
+        setMediaError(error);
+        setTimeout(() => setMediaError(null), 5000);
+      }
+    );
     setSelectedMedia(null);
-    setReplyingTo(null); // Clear reply after sending
+    setReplyingTo(null);
   };
 
 
@@ -699,14 +721,26 @@ export default function ChatRoomScreen() {
             </View>
           </View>
         ) : (
-          <ChatInput
-            value={inputText}
-            onChangeText={(text) => handleInputChange(text, setInputText, currentUserId, id, myTypingTimeoutRef)}
-            onSend={() => handleSendMessage(inputText, currentUserId, id, replyingTo, setInputText, setReplyingTo, setMessages)}
-            onCameraPress={() => handlePickMedia('camera')}
-            onMicPress={() => console.log('Mic')}
-            onImagePress={() => handlePickMedia('library')}
-          />
+          <>
+            {/* Media Error Message */}
+            {mediaError && (
+              <View className="bg-red-500/10 mx-4 mb-2 px-4 py-3 rounded-xl border border-red-500/30 flex-row items-center">
+                <AlertCircle size={18} color="#EF4444" />
+                <Text className="text-red-400 text-sm font-outfit ml-2 flex-1">{mediaError}</Text>
+                <TouchableOpacity onPress={() => setMediaError(null)}>
+                  <X size={16} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            )}
+            <ChatInput
+              value={inputText}
+              onChangeText={(text) => handleInputChange(text, setInputText, currentUserId, id, myTypingTimeoutRef)}
+              onSend={() => handleSendMessage(inputText, currentUserId, id, replyingTo, setInputText, setReplyingTo, setMessages)}
+              onCameraPress={() => handlePickMedia('camera')}
+              onMicPress={() => console.log('Mic')}
+              onImagePress={() => handlePickMedia('library')}
+            />
+          </>
         )}
       </KeyboardAvoidingView>
 

@@ -11,12 +11,19 @@ import { supabase } from './supabase';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
+export type MediaPickResult = {
+  success: boolean;
+  file?: ImagePicker.ImagePickerAsset;
+  error?: string;
+};
+
 /**
  * Pick media from camera or library
  */
 export const pickMedia = async (
   mode: 'library' | 'camera',
-  onSuccess: (file: ImagePicker.ImagePickerAsset) => void
+  onSuccess: (file: ImagePicker.ImagePickerAsset) => void,
+  onError?: (error: string) => void
 ) => {
   try {
     let result: ImagePicker.ImagePickerResult;
@@ -29,7 +36,6 @@ export const pickMedia = async (
       }
 
       result = await ImagePicker.launchCameraAsync({
-        // FIX: Use simple array instead of deprecated Enum
         mediaTypes: ['images', 'videos'], 
         allowsEditing: false,
         quality: 0.8,
@@ -43,7 +49,6 @@ export const pickMedia = async (
       }
 
       result = await ImagePicker.launchImageLibraryAsync({
-        // FIX: Use simple array instead of deprecated Enum
         mediaTypes: ['images', 'videos'],
         allowsEditing: false,
         quality: 0.8,
@@ -54,8 +59,11 @@ export const pickMedia = async (
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const file = result.assets[0];
 
+      // Check file size
       if (file.fileSize && file.fileSize > MAX_FILE_SIZE) {
-        Alert.alert('File Too Large', 'Please select a file smaller than 20MB.');
+        const sizeMB = (file.fileSize / (1024 * 1024)).toFixed(1);
+        const errorMsg = `File is too large (${sizeMB}MB). Maximum size is 20MB.`;
+        onError?.(errorMsg);
         return;
       }
 
@@ -63,7 +71,7 @@ export const pickMedia = async (
     }
   } catch (error) {
     console.error('Error picking media:', error);
-    Alert.alert('Error', 'Failed to pick media. Please try again.');
+    onError?.('Failed to pick media. Please try again.');
   }
 };
 
@@ -76,9 +84,23 @@ export const uploadAndSendMedia = async (
   userId: string,
   setMessages: (updater: (prev: any[]) => any[]) => void,
   setUploading: (uploading: boolean) => void,
-  replyToId?: string | null
+  replyToId?: string | null,
+  onError?: (error: string) => void
 ) => {
   if (!file || !userId) return;
+
+  // Check file size before upload
+  try {
+    const fileInfo = await ExpoFS.getInfoAsync(file.uri);
+    if (fileInfo.exists && 'size' in fileInfo && fileInfo.size > MAX_FILE_SIZE) {
+      const sizeMB = (fileInfo.size / (1024 * 1024)).toFixed(1);
+      const errorMsg = `File is too large (${sizeMB}MB). Maximum size is 20MB.`;
+      onError?.(errorMsg);
+      return;
+    }
+  } catch (e) {
+    console.log('Could not check file size:', e);
+  }
 
   const mediaType = file.type === 'video' ? 'video' : 'image';
   const fileExt = file.uri.split('.').pop()?.toLowerCase() || (mediaType === 'video' ? 'mp4' : 'jpg');
@@ -104,7 +126,7 @@ export const uploadAndSendMedia = async (
   setUploading(true);
 
   try {
-    // 1. Read file as base64 string (Using Legacy API)
+    // 1. Read file as base64 string
     const base64 = await ExpoFS.readAsStringAsync(file.uri, {
       encoding: 'base64',
     });
@@ -159,10 +181,29 @@ export const uploadAndSendMedia = async (
       return [messageData, ...withoutTemp];
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading media:', error);
-    Alert.alert('Upload Failed', 'Failed to upload media. Please try again.');
-    setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+    
+    // Build error message
+    let errorMessage = 'Upload failed. Please try again.';
+    
+    if (error?.message?.includes('Payload too large') || error?.statusCode === 413) {
+      errorMessage = 'File is too large. Maximum size is 20MB.';
+    } else if (error?.message?.includes('network') || error?.message?.includes('Network')) {
+      errorMessage = 'Network error. Check your connection.';
+    } else if (error?.message?.includes('storage')) {
+      errorMessage = 'Storage error. Try again later.';
+    }
+    
+    // Update message to show error status
+    setMessages((prev) => prev.map((msg) => 
+      msg.id === tempId 
+        ? { ...msg, status: 'error', errorMessage } 
+        : msg
+    ));
+    
+    // Also call error callback if provided
+    onError?.(errorMessage);
   } finally {
     setUploading(false);
   }
