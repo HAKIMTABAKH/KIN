@@ -1,23 +1,27 @@
 import ChatHeader from '@/components/ChatHeader';
 import ChatInput from '@/components/ChatInput';
+import ChatMedia from '@/components/ChatMedia';
 import MessageMenu from '@/components/MessageMenu';
 import TypingIndicator from '@/components/TypingIndicator';
 import { fetchMessageById, Message } from '@/lib/chat';
 import { handleDelete, handleInputChange, handleLongPress, handleReaction, handleReply, handleSendMessage, scrollToMessage, setupRoom } from '@/lib/chatHandlers';
-import { getSeparatorText } from '@/lib/dateHelpers';
+import { formatTimeAgo, getSeparatorText } from '@/lib/dateHelpers';
+import { pickMedia, uploadAndSendMedia } from '@/lib/mediaHandlers';
 import {
   getUserInitial,
   isEmojiOnly,
   normalizeReplyData
 } from '@/lib/messageHelpers';
 import { supabase } from '@/lib/supabase';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { AlertCircle, ArrowDownFromLine, Clock, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Text,
@@ -26,17 +30,27 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Helper to format "Seen X ago"
-const formatTimeAgo = (dateString: string) => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) return 'Just now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-  return date.toLocaleDateString();
-};
+// Media Preview Component for Bottom Sheet
+function MediaPreview({ uri, type }: { uri: string; type: 'video' | 'image' }) {
+  const player = useVideoPlayer(uri, (player) => {
+    player.loop = false;
+    player.muted = false;
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={{
+        width: '100%',
+        height: 300,
+        backgroundColor: '#1e293b',
+        borderRadius: 16
+      }}
+      contentFit="contain"
+      nativeControls={true}
+    />
+  );
+}
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -56,14 +70,18 @@ export default function ChatRoomScreen() {
   const [showScrollButton, setShowScrollButton] = useState(false); // Show scroll to bottom button
   const [blockStatus, setBlockStatus] = useState<'none' | 'blocked_by_me' | 'blocked_me'>('none');
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
-  
+  const [uploading, setUploading] = useState(false); // Media upload state
+  const [uploadProgress, setUploadProgress] = useState(0); // Upload progress percentage
+  const [selectedMedia, setSelectedMedia] = useState<ImagePicker.ImagePickerAsset | null>(null); // Selected media for preview
+  const [showMediaPreview, setShowMediaPreview] = useState(false); // Show media preview bottom sheet
+
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To clear the bubble
   const myTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To throttle my sending
 
   // Mark messages as read
   const markAsRead = async () => {
     if (!currentUserId || !id) return;
-    
+
     // Update ALL messages in this room that:
     // 1. Are NOT from me
     // 2. Are currently unread (read_at is null)
@@ -73,13 +91,32 @@ export default function ChatRoomScreen() {
       .eq('room_id', id)
       .neq('user_id', currentUserId)
       .is('read_at', null);
-    
+
     if (error) console.error('Error marking read:', error);
   };
 
+  // Handle media picking
+  const handlePickMedia = (mode: 'library' | 'camera') => {
+    pickMedia(mode, (file) => {
+      setSelectedMedia(file);
+      setShowMediaPreview(true);
+    });
+  };
+
+  // Handle send from preview
+  const handleSendMedia = async () => {
+    if (!selectedMedia || !currentUserId) return;
+
+    setShowMediaPreview(false);
+    await uploadAndSendMedia(selectedMedia, id, currentUserId, setMessages, setUploading);
+    setSelectedMedia(null);
+  };
+
+
+
   useEffect(() => {
     setupRoom(id, setCurrentUserId, setRoomName, setMessages, setLoading, router);
-    
+
     // Mark existing messages as read when entering the room
     if (currentUserId) {
       markAsRead();
@@ -100,7 +137,7 @@ export default function ChatRoomScreen() {
           if (payload.eventType === 'INSERT') {
             // Use the helper function that handles reply data correctly
             const { data } = await fetchMessageById(payload.new.id);
-            
+
             if (data) {
               // Check if message already exists (from optimistic update)
               setMessages((prev) => {
@@ -113,7 +150,7 @@ export default function ChatRoomScreen() {
                   return [data, ...prev];
                 }
               });
-              
+
               // If a NEW message arrives and I'm looking at the screen, mark it read
               if (data.user_id !== currentUserId) {
                 markAsRead();
@@ -143,7 +180,7 @@ export default function ChatRoomScreen() {
           // Check if it's someone else typing
           if (payload.payload.user_id !== currentUserId) {
             setIsTyping(true);
-            
+
             // Fetch the typing user's profile if we don't have it
             if (payload.payload.avatar_url !== undefined) {
               setTypingUserProfile({
@@ -157,12 +194,12 @@ export default function ChatRoomScreen() {
                 .select('avatar_url, full_name')
                 .eq('id', payload.payload.user_id)
                 .single();
-              
+
               if (profile) {
                 setTypingUserProfile(profile);
               }
             }
-            
+
             // Clear the bubble after 3 seconds if no new signal comes
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             typingTimeoutRef.current = setTimeout(() => {
@@ -231,7 +268,7 @@ export default function ChatRoomScreen() {
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.user_id === currentUserId;
-    
+
     // 1. Date Separator Logic
     const olderMessage = messages[index + 1];
     const currentDate = new Date(item.created_at);
@@ -254,7 +291,12 @@ export default function ChatRoomScreen() {
     // 6. Check message status (for optimistic sending)
     const isSending = (item as any).status === 'sending';
     const isError = (item as any).status === 'error';
-    
+    const isUploading = (item as any).status === 'uploading';
+
+    // 6b. Check if message has media
+    const hasMedia = !!(item as any).media_url;
+    const mediaType = (item as any).media_type;
+
     // 7. Check if this is the latest message sent by me (for read receipt)
     // Only show "Seen" if:
     // - This is my message
@@ -264,7 +306,7 @@ export default function ChatRoomScreen() {
     const isLatestOwnMessage = myMessages.length > 0 && myMessages[0].id === item.id;
     const otherUserHasReplied = messages.length > 0 && messages[0].user_id !== currentUserId;
     const readAt = (item as any).read_at;
-    
+
     // Show read receipt only if it's my latest message AND the other user hasn't replied yet
     const shouldShowReadReceipt = isMe && isLatestOwnMessage && readAt && !otherUserHasReplied;
 
@@ -283,7 +325,7 @@ export default function ChatRoomScreen() {
         <View className={`mb-2 ${isMe ? 'self-end items-end' : 'self-start items-start flex-row'} max-w-[80%]`}>
           {/* Profile Image (Other users only) */}
           {!isMe && !onlyEmojis && (
-            <TouchableOpacity 
+            <TouchableOpacity
               className="mr-2 mt-6"
               onPress={() => {
                 if (item.user_id) {
@@ -293,8 +335,8 @@ export default function ChatRoomScreen() {
               activeOpacity={0.7}
             >
               {item.profiles?.avatar_url ? (
-                <Image 
-                  source={{ uri: item.profiles.avatar_url }} 
+                <Image
+                  source={{ uri: item.profiles.avatar_url }}
                   className="w-8 h-8 rounded-full"
                 />
               ) : (
@@ -308,7 +350,7 @@ export default function ChatRoomScreen() {
           )}
 
           <View className={`flex-shrink ${isMe ? 'items-end' : ''}`}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onLongPress={() => handleLongPress(item, setSelectedMessage)}
               delayLongPress={300}
               activeOpacity={0.8}
@@ -320,97 +362,122 @@ export default function ChatRoomScreen() {
                 </Text>
               )}
 
-          {/* THE BUBBLE */}
-          <View 
-            className={`
-              relative mb-6
-              ${onlyEmojis ? 'bg-transparent px-0 py-0' : 'px-4 py-3 rounded-2xl'}
-              ${!onlyEmojis && isMe ? 'bg-kin-amber rounded-tr-sm' : ''}
-              ${!onlyEmojis && !isMe ? 'bg-kin-midnight border border-kin-slate rounded-tl-sm' : ''}
-              ${isFlashing && !onlyEmojis ? (isMe ? 'opacity-70' : 'bg-kin-slate/50') : ''}
-              ${isSending ? 'opacity-70' : 'opacity-100'}
-            `}
-            style={{ 
-              alignSelf: 'flex-start'
-            }}
-          >
-            {/* REPLY PREVIEW - Instagram/Messenger Style */}
-            {replyData && !onlyEmojis && (
-              <TouchableOpacity
-                onPress={() => scrollToMessage(replyData.id, messages, flatListRef, setFlashMessageId)}
-                activeOpacity={0.7}
-                className={`mb-2.5 px-3 py-2 rounded-xl border-l-[3px] ${
-                  isMe 
-                    ? 'bg-black/15 border-black/30' 
-                    : 'bg-kin-amber/10 border-kin-amber'
-                }`}
-              >
-                <Text className={`text-[11px] font-outfit-bold mb-1 ${
-                  isMe ? 'text-black/80' : 'text-kin-amber'
-                }`}>
-                  {replyData.profiles?.full_name || 'User'}
-                </Text>
-                <Text 
-                  className={`text-xs leading-4 ${isMe ? 'text-black/70' : 'text-kin-mist/90'}`} 
-                  numberOfLines={2}
-                >
-                  {replyData.content}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {/* MESSAGE CONTENT */}
-            <Text 
-              className={`font-outfit
-                ${onlyEmojis ? 'text-3xl' : 'text-base'}
-                ${!onlyEmojis && isMe ? 'text-black font-outfit-medium' : 'text-kin-white'}
-              `}
-            >
-              {item.content}
-            </Text>
-
-            {/* REACTIONS PILL */}
-            {hasReactions && (
-              <TouchableOpacity
-                onPress={() => handleLongPress(item, setSelectedMessage)}
+              {/* THE BUBBLE */}
+              <View
                 className={`
+              relative ${hasReactions ? 'mb-8' : 'mb-1'}
+              ${onlyEmojis || hasMedia ? 'bg-transparent px-0 py-0' : 'px-4 py-3 rounded-2xl'}
+              ${!onlyEmojis && !hasMedia && isMe ? 'bg-kin-amber rounded-tr-sm' : ''}
+              ${!onlyEmojis && !hasMedia && !isMe ? 'bg-kin-midnight border border-kin-slate rounded-tl-sm' : ''}
+              ${isFlashing && !onlyEmojis && !hasMedia ? (isMe ? 'opacity-70' : 'bg-kin-slate/50') : ''}
+              ${isSending || isUploading ? 'opacity-70' : 'opacity-100'}
+            `}
+                style={{
+                  alignSelf: 'flex-start'
+                }}
+              >
+                {/* REPLY PREVIEW - Instagram/Messenger Style */}
+                {replyData && !onlyEmojis && (
+                  <TouchableOpacity
+                    onPress={() => scrollToMessage(replyData.id, messages, flatListRef, setFlashMessageId)}
+                    activeOpacity={0.7}
+                    className={`mb-2.5 px-3 py-2 rounded-xl border-l-[3px] ${isMe
+                        ? 'bg-black/15 border-black/30'
+                        : 'bg-kin-amber/10 border-kin-amber'
+                      }`}
+                  >
+                    <Text className={`text-[11px] font-outfit-bold mb-1 ${isMe ? 'text-black/80' : 'text-kin-amber'
+                      }`}>
+                      {replyData.profiles?.full_name || 'User'}
+                    </Text>
+                    <Text
+                      className={`text-xs leading-4 ${isMe ? 'text-black/70' : 'text-kin-mist/90'}`}
+                      numberOfLines={2}
+                    >
+                      {replyData.content}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* MEDIA CONTENT (Image/Video) - New Component */}
+                {hasMedia && (
+                  <View className="relative rounded-xl overflow-hidden">
+                    <ChatMedia
+                      uri={(item as any).media_url}
+                      type={mediaType || 'image'}
+                    />
+
+                    {/* Upload Progress Overlay */}
+                    {isUploading && (
+                      <View className="absolute inset-0 bg-black/60 items-center justify-center rounded-xl">
+                        <ActivityIndicator size="large" color="#F59E0B" />
+                        <Text className="text-white text-xs font-outfit-medium mt-2">Uploading...</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* TEXT CONTENT (with bubble if media exists) */}
+                {item.content && !onlyEmojis && (
+                  <View className={hasMedia ? `mt-2 px-4 py-3 rounded-2xl ${isMe ? 'bg-kin-amber rounded-tr-sm' : 'bg-kin-midnight border border-kin-slate rounded-tl-sm'}` : ''}>
+                    <Text
+                      className={`font-outfit text-base
+                    ${!onlyEmojis && isMe ? 'text-black font-outfit-medium' : 'text-kin-white'}
+                  `}
+                    >
+                      {item.content}
+                    </Text>
+                  </View>
+                )}
+
+                {/* EMOJI ONLY CONTENT */}
+                {onlyEmojis && (
+                  <Text className="text-3xl font-outfit">
+                    {item.content}
+                  </Text>
+                )}
+
+                {/* REACTIONS PILL */}
+                {hasReactions && (
+                  <TouchableOpacity
+                    onPress={() => handleLongPress(item, setSelectedMessage)}
+                    className={`
                   absolute -bottom-5
                   ${isMe ? 'right-0' : 'left-0'}
                   bg-[#2D3246] rounded-full px-2 py-1 flex-row items-center border-2 border-kin-charcoal shadow-sm z-10
                 `}
-              >
-                {Object.entries(reactions).map(([emoji, users]) => {
-                  const userList = users as string[];
-                  const count = userList.length;
-                  
-                  return (
-                    <View key={emoji} className="flex-row items-center mr-1">
-                      <Text className="text-xs">{emoji}</Text>
-                      {count > 1 && (
-                        <Text className="text-[10px] text-kin-white ml-0.5 font-outfit-bold">{count}</Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </TouchableOpacity>
-            )}
-          </View>
+                  >
+                    {Object.entries(reactions).map(([emoji, users]) => {
+                      const userList = users as string[];
+                      const count = userList.length;
+
+                      return (
+                        <View key={emoji} className="flex-row items-center mr-1">
+                          <Text className="text-xs">{emoji}</Text>
+                          {count > 1 && (
+                            <Text className="text-[10px] text-kin-white ml-0.5 font-outfit-bold">{count}</Text>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </TouchableOpacity>
+                )}
+              </View>
             </TouchableOpacity>
-            
+
             {/* STATUS INDICATORS (Sending/Error/Read) - Show for ALL messages */}
-            <View className="flex-row items-center gap-1" style={{ marginTop: hasReactions ? 4 : 4 }}>
-            
-              
+            <View className={`flex-row items-center gap-1 ${hasReactions ? 'mt-2' : 'mt-1'}`}>
+
               {/* Sending Icon */}
               {isSending && (
                 <Clock size={10} color="#F59E0B" />
               )}
-              
+
               {/* Error Icon */}
               {isError && (
                 <AlertCircle size={10} color="#EF4444" />
               )}
-              
+
               {/* Read Receipt */}
               {shouldShowReadReceipt && !isSending && !isError && (
                 <Text className="text-[10px] text-kin-amber font-outfit-bold">
@@ -434,8 +501,8 @@ export default function ChatRoomScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-kin-charcoal" edges={['top', 'left', 'right']}>
-      <ChatHeader 
-        roomName={roomName} 
+      <ChatHeader
+        roomName={roomName}
         onBack={() => router.back()}
         onVoiceCall={() => console.log('Voice call')}
         onVideoCall={() => console.log('Video call')}
@@ -466,8 +533,8 @@ export default function ChatRoomScreen() {
             // Prevents crash if scroll fails (common with dynamic height items)
             const wait = new Promise(resolve => setTimeout(resolve, 500));
             wait.then(() => {
-              flatListRef.current?.scrollToIndex({ 
-                index: info.index, 
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
                 animated: true,
                 viewPosition: 0.5
               });
@@ -487,13 +554,13 @@ export default function ChatRoomScreen() {
             className="absolute bottom-28 self-center bg-kin-mist rounded-full p-2 shadow-lg"
             style={{ elevation: 5 }}
           >
-            <ArrowDownFromLine  size={22} color="#000000" />
+            <ArrowDownFromLine size={22} color="#000000" />
           </TouchableOpacity>
         )}
 
         {/* Typing Indicator */}
-        <TypingIndicator 
-          isVisible={isTyping} 
+        <TypingIndicator
+          isVisible={isTyping}
           avatarUrl={typingUserProfile?.avatar_url}
           userName={typingUserProfile?.full_name}
         />
@@ -534,7 +601,7 @@ export default function ChatRoomScreen() {
                     .eq('user_id', currentUserId)
                     .eq('blocked_user_id', otherUserId)
                     .single();
-                  
+
                   if (data) {
                     await supabase.from('blocked_users').delete().eq('id', data.id);
                     setBlockStatus('none');
@@ -562,9 +629,9 @@ export default function ChatRoomScreen() {
             value={inputText}
             onChangeText={(text) => handleInputChange(text, setInputText, currentUserId, id, myTypingTimeoutRef)}
             onSend={() => handleSendMessage(inputText, currentUserId, id, replyingTo, setInputText, setReplyingTo, setMessages)}
-            onCameraPress={() => console.log('Camera')}
+            onCameraPress={() => handlePickMedia('camera')}
             onMicPress={() => console.log('Mic')}
-            onImagePress={() => console.log('Image')}
+            onImagePress={() => handlePickMedia('library')}
           />
         )}
       </KeyboardAvoidingView>
@@ -579,6 +646,84 @@ export default function ChatRoomScreen() {
         onDelete={(msgId) => handleDelete(msgId, id, setMessages)}
         onReaction={(emoji) => handleReaction(emoji, selectedMessage, currentUserId, setMessages, setSelectedMessage)}
       />
+
+      {/* Media Preview Bottom Sheet */}
+      {showMediaPreview && selectedMedia && (
+        <View className="absolute inset-0 bg-black/80 justify-end">
+          <TouchableOpacity
+            className="flex-1"
+            activeOpacity={1}
+            onPress={() => {
+              setShowMediaPreview(false);
+              setSelectedMedia(null);
+            }}
+          />
+
+          <View className="bg-kin-charcoal rounded-t-3xl pb-8">
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-6 py-4 border-b border-kin-slate/30">
+              <Text className="text-kin-white text-lg font-outfit-bold">Send Media</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowMediaPreview(false);
+                  setSelectedMedia(null);
+                }}
+              >
+                <X color="#9CA3AF" size={24} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Media Preview */}
+            <View className="px-6 py-6 items-center">
+              {selectedMedia.type === 'video' ? (
+                <MediaPreview uri={selectedMedia.uri} type="video" />
+              ) : (
+                <Image
+                  source={{ uri: selectedMedia.uri }}
+                  style={{
+                    width: '100%',
+                    height: 300,
+                    backgroundColor: '#1e293b',
+                    borderRadius: 16
+                  }}
+                  contentFit="contain"
+                  transition={200}
+                />
+              )}
+
+              {/* File Info */}
+              <View className="mt-4 flex-row items-center gap-2">
+                <Text className="text-kin-mist text-sm font-outfit">
+                  {selectedMedia.type === 'video' ? 'Video' : 'Image'}
+                </Text>
+                {selectedMedia.fileSize && (
+                  <>
+                    <Text className="text-kin-mist text-sm">•</Text>
+                    <Text className="text-kin-mist text-sm font-outfit">
+                      {(selectedMedia.fileSize / (1024 * 1024)).toFixed(2)} MB
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Send Button */}
+            <View className="px-6">
+              <TouchableOpacity
+                onPress={handleSendMedia}
+                disabled={uploading}
+                className="bg-kin-amber py-4 rounded-2xl items-center"
+              >
+                {uploading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text className="text-black text-base font-outfit-bold">Send</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

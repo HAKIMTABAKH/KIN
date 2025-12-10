@@ -22,14 +22,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "pan" 
-
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro"
-
     },
     "plugins": [
       "expo-router",
@@ -50,7 +48,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.831631933144-rts5sthfdgqv85f7ft9jceng7cr6plnq"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

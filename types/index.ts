@@ -113,6 +113,8 @@ export interface Message {
   created_at: string;
   reply_to_id?: string | null;
   reactions?: Record<string, string[]>; // emoji -> array of user IDs
+  media_url?: string | null;
+  media_type?: 'image' | 'video' | null;
   profiles?: {
     full_name?: string;
     avatar_url?: string;
