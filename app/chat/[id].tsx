@@ -8,9 +8,9 @@ import { handleDelete, handleInputChange, handleLongPress, handleReaction, handl
 import { formatTimeAgo, getSeparatorText } from '@/lib/dateHelpers';
 import { pickMedia, uploadAndSendMedia } from '@/lib/mediaHandlers';
 import {
-  getUserInitial,
-  isEmojiOnly,
-  normalizeReplyData
+    getUserInitial,
+    isEmojiOnly,
+    normalizeReplyData
 } from '@/lib/messageHelpers';
 import { supabase } from '@/lib/supabase';
 import { Image } from 'expo-image';
@@ -20,13 +20,13 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { AlertCircle, ArrowDownFromLine, Clock, Play, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -71,6 +71,7 @@ export default function ChatRoomScreen() {
   const [blockStatus, setBlockStatus] = useState<'none' | 'blocked_by_me' | 'blocked_me'>('none');
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
   const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(null); // Other user's avatar
+  const [otherUserLastSeen, setOtherUserLastSeen] = useState<string | null>(null); // Other user's last seen
   const [uploading, setUploading] = useState(false); // Media upload state
   const [uploadProgress, setUploadProgress] = useState(0); // Upload progress percentage
   const [selectedMedia, setSelectedMedia] = useState<ImagePicker.ImagePickerAsset | null>(null); // Selected media for preview
@@ -159,7 +160,21 @@ export default function ChatRoomScreen() {
 
 
   useEffect(() => {
-    setupRoom(id, setCurrentUserId, setRoomName, setMessages, setLoading, router, setOtherUserAvatar);
+    setupRoom(
+      id, 
+      setCurrentUserId, 
+      setRoomName, 
+      setMessages, 
+      setLoading, 
+      router, 
+      setOtherUserAvatar,
+      (profile) => {
+        if (profile) {
+          setOtherUserId(profile.id);
+          setOtherUserLastSeen(profile.last_seen || null);
+        }
+      }
+    );
 
     // Mark existing messages as read when entering the room
     if (currentUserId) {
@@ -565,6 +580,8 @@ export default function ChatRoomScreen() {
       <ChatHeader
         roomName={roomName}
         avatarUrl={otherUserAvatar}
+        userId={otherUserId}
+        lastSeen={otherUserLastSeen}
         onBack={() => router.back()}
         onVoiceCall={() => console.log('Voice call')}
         onVideoCall={() => console.log('Video call')}

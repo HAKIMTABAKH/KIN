@@ -1,32 +1,35 @@
 import BottomSheetMenu from '@/components/BottomSheetMenu';
 import TabButton from '@/components/TabButton';
+import UserAvatar from '@/components/UserAvatar';
 import UserCard from '@/components/UserCard';
 import {
-  acceptRequest,
-  blockUser,
-  cancelRequest,
-  declineRequest,
-  fetchFriends,
-  fetchRequests,
-  fetchSuggestions,
-  getChatRoomWithFriend,
-  removeSuggestion,
-  sendFriendRequest,
-  Suggestion,
-  unfriendUser
+    acceptRequest,
+    blockUser,
+    cancelRequest,
+    declineRequest,
+    fetchFriends,
+    fetchRequests,
+    fetchSuggestions,
+    getChatRoomWithFriend,
+    removeSuggestion,
+    sendFriendRequest,
+    Suggestion,
+    unfriendUser
 } from '@/lib/people';
+import { usePresence } from '@/lib/PresenceContext';
+import { formatLastSeen } from '@/lib/presenceUtils';
 import { supabase } from '@/lib/supabase';
 import { Friend, FriendRequest } from '@/types';
 import { useRouter } from 'expo-router';
 import { Ban, Check, Circle, Clock, Ellipsis, MessageCircle, Search, UserMinus, UserPlus, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -52,6 +55,9 @@ export default function PeopleScreen() {
   // Friend menu state
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [friendMenuVisible, setFriendMenuVisible] = useState(false);
+  
+  // Get presence context at component level
+  const { onlineUsers } = usePresence();
 
   useEffect(() => {
     loadData();
@@ -297,36 +303,59 @@ export default function PeopleScreen() {
         keyExtractor={item => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F59E0B" />}
         contentContainerStyle={{ padding: 24 }}
-        renderItem={({ item }) => (
-          <UserCard
-            title={item.profile?.full_name}
-            subtitle="Friend"
-            avatarUrl={item.profile?.avatar_url}
-            onPress={() => router.push(`/user/${item.profile?.id}`)}
-            rightAction={
-              <View className="flex-row gap-2">
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleMessageFriend(item.profile?.id);
-                  }}
-                  className="bg-kin-slate/20 p-3 rounded-full active:bg-kin-amber/20"
-                >
-                  <MessageCircle size={20} color="#F59E0B" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    openFriendMenu(item);
-                  }}
-                  className="p-3 rounded-full active:bg-kin-amber/20"
-                >
-                  <Ellipsis size={20} color="#F59E0B" />
-                </TouchableOpacity>
+        renderItem={({ item }) => {
+          const isOnline = item.profile?.id ? onlineUsers.has(item.profile.id) : false;
+          const statusText = isOnline ? 'Active Now' : `Seen ${formatLastSeen(item.profile?.last_seen)}`;
+          
+          return (
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={() => router.push(`/user/${item.profile?.id}`)}
+              className="bg-kin-midnight p-4 rounded-2xl border border-kin-slate/20 mb-3"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center flex-1">
+                  {/* UserAvatar with presence indicator */}
+                  <UserAvatar
+                    userId={item.profile?.id || ''}
+                    avatarUrl={item.profile?.avatar_url}
+                    lastSeen={item.profile?.last_seen}
+                    size={48}
+                  />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-kin-white font-outfit-bold text-lg" numberOfLines={1}>
+                      {item.profile?.full_name}
+                    </Text>
+                    <Text className={`text-xs ${isOnline ? 'text-green-500 font-outfit-bold' : 'text-kin-mist'}`}>
+                      {statusText}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View className="ml-2 flex-row gap-2">
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleMessageFriend(item.profile?.id);
+                    }}
+                    className="bg-kin-slate/20 p-3 rounded-full active:bg-kin-amber/20"
+                  >
+                    <MessageCircle size={20} color="#F59E0B" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openFriendMenu(item);
+                    }}
+                    className="p-3 rounded-full active:bg-kin-amber/20"
+                  >
+                    <Ellipsis size={20} color="#F59E0B" />
+                  </TouchableOpacity>
+                </View>
               </View>
-            }
-          />
-        )}
+            </TouchableOpacity>
+          );
+        }}
       />
     );
   }

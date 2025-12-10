@@ -1,6 +1,8 @@
 import BottomSheetMenu from "@/components/BottomSheetMenu";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import UserAvatar from "@/components/UserAvatar";
 import { deleteRoomForUser, fetchFriends, fetchRooms, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
+import { usePresence } from "@/lib/PresenceContext";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Archive, Bell, BellOff, Circle, Pin, Search, SquarePen, Trash2, UserPlus, Users } from "lucide-react-native";
@@ -16,6 +18,9 @@ export default function ChatsListScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithUser | null>(null);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  
+  // Get presence context for online status
+  const { onlineUsers } = usePresence();
 
   useEffect(() => {
     loadData();
@@ -66,14 +71,12 @@ export default function ChatsListScreen() {
             className="items-center"
             onPress={() => handleFriendClick(item.profile?.id)}
           >
-            <View className="relative">
-              <Image 
-                source={{ uri: item.profile?.avatar_url || 'https://i.pravatar.cc/150' }} 
-                className="h-16 w-16 rounded-full bg-kin-slate mb-2" 
+            <View className="mb-2">
+              <UserAvatar
+                userId={item.profile?.id || ''}
+                avatarUrl={item.profile?.avatar_url}
+                size={64}
               />
-              {item.isOnline && (
-                <View className="absolute bottom-2 right-0 h-4 w-4 bg-green-500 rounded-full border-2 border-kin-charcoal" />
-              )}
             </View>
             <Text className="text-kin-white text-xs font-outfit-medium w-16 text-center" numberOfLines={1}>
               {item.profile?.full_name?.split(' ')[0] || 'Friend'}

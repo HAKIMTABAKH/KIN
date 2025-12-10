@@ -8,6 +8,7 @@ export interface Profile {
   full_name: string;
   avatar_url?: string; // The '?' makes it optional
   updated_at: string;
+  last_seen?: string; // ISO timestamp for presence feature
 }
 
 export interface ProfileData {
@@ -76,6 +77,8 @@ export interface ChatInputProps {
 export interface ChatHeaderProps {
   roomName: string;
   avatarUrl?: string | null;
+  userId?: string | null;
+  lastSeen?: string | null;
   onBack: () => void;
   onVoiceCall?: () => void;
   onVideoCall?: () => void;
@@ -96,6 +99,7 @@ export interface Friend {
     id: string;
     full_name: string;
     avatar_url?: string;
+    last_seen?: string | null;
   };
 }
 
@@ -201,6 +205,7 @@ export interface Friend {
     id: string;
     full_name: string;
     avatar_url?: string;
+    last_seen?: string | null;
   };
   isOnline: boolean;
 }

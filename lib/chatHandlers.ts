@@ -19,7 +19,8 @@ export const setupRoom = async (
   setMessages: (messages: any[]) => void,
   setLoading: (loading: boolean) => void,
   router: any,
-  setOtherUserAvatar?: (avatar: string | null) => void
+  setOtherUserAvatar?: (avatar: string | null) => void,
+  setOtherUserProfile?: (profile: { id: string; last_seen?: string | null } | null) => void
 ) => {
   // Get current user
   const { user } = await getCurrentUser();
@@ -45,10 +46,10 @@ export const setupRoom = async (
   const otherUserId = roomMembers?.find(m => m.user_id !== user.id)?.user_id;
 
   if (otherUserId) {
-    // Fetch other user's profile with avatar
+    // Fetch other user's profile with avatar and last_seen
     const { data: otherUserProfile } = await supabase
       .from('profiles')
-      .select('full_name, avatar_url')
+      .select('full_name, avatar_url, last_seen')
       .eq('id', otherUserId)
       .single();
 
@@ -61,6 +62,14 @@ export const setupRoom = async (
     // Set avatar if callback provided
     if (setOtherUserAvatar && otherUserProfile?.avatar_url) {
       setOtherUserAvatar(otherUserProfile.avatar_url);
+    }
+
+    // Set other user profile for presence
+    if (setOtherUserProfile) {
+      setOtherUserProfile({
+        id: otherUserId,
+        last_seen: otherUserProfile?.last_seen || null
+      });
     }
   } else {
     setRoomName(roomData?.name || 'Chat');

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { UserProvider } from '../context/UserContext';
 import "./global.css";
+import { PresenceProvider } from "@/lib/PresenceContext";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -83,29 +84,31 @@ export default function RootLayout() {
   }
 
   return (
-    <UserProvider> 
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(app)" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen 
-          name="chat/[id]" 
-          options={{
-            headerShown: false,
-            headerTitle: "Chat",
-            presentation: "card"
-          }}
-        />
-        <Stack.Screen 
-          name="(app)/media-viewer" 
-          options={{
-            presentation: "transparentModal",
-            animation: "fade",
-            headerShown: false
-          }}
-        />
-      </Stack>
-    </UserProvider>
+    <PresenceProvider>
+      <UserProvider> 
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen 
+            name="chat/[id]" 
+            options={{
+              headerShown: false,
+              headerTitle: "Chat",
+              presentation: "card"
+            }}
+          />
+          <Stack.Screen 
+            name="(app)/media-viewer" 
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false
+            }}
+          />
+        </Stack>
+      </UserProvider>
+    </PresenceProvider>
   );
 }
