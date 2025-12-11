@@ -10,14 +10,12 @@ import { fetchMessageById, fetchMessages, getRoomDetails, sendMessage as sendCha
 import { supabase } from './supabase';
 
 /**
- * Setup room - Load initial data and authenticate user
+ * Setup room metadata only (no messages) - for use with React Query
  */
-export const setupRoom = async (
+export const setupRoomMetadata = async (
   roomId: string,
   setCurrentUserId: (id: string) => void,
   setRoomName: (name: string) => void,
-  setMessages: (messages: any[]) => void,
-  setLoading: (loading: boolean) => void,
   router: any,
   setOtherUserAvatar?: (avatar: string | null) => void,
   setOtherUserProfile?: (profile: { id: string; last_seen?: string | null } | null) => void
@@ -33,9 +31,6 @@ export const setupRoom = async (
   
   setCurrentUserId(user.id);
 
-  // Get room details
-  const { data: roomData } = await getRoomDetails(roomId);
-  
   // Get other user in the room to display their name
   const { data: roomMembers } = await supabase
     .from('user_rooms')
@@ -56,6 +51,7 @@ export const setupRoom = async (
     if (otherUserProfile?.full_name) {
       setRoomName(otherUserProfile.full_name);
     } else {
+      const { data: roomData } = await getRoomDetails(roomId);
       setRoomName(roomData?.name || 'Chat');
     }
 
@@ -72,9 +68,26 @@ export const setupRoom = async (
       });
     }
   } else {
+    const { data: roomData } = await getRoomDetails(roomId);
     setRoomName(roomData?.name || 'Chat');
   }
+};
 
+/**
+ * Setup room - Load initial data and authenticate user (legacy - includes messages)
+ */
+export const setupRoom = async (
+  roomId: string,
+  setCurrentUserId: (id: string) => void,
+  setRoomName: (name: string) => void,
+  setMessages: (messages: any[]) => void,
+  setLoading: (loading: boolean) => void,
+  router: any,
+  setOtherUserAvatar?: (avatar: string | null) => void,
+  setOtherUserProfile?: (profile: { id: string; last_seen?: string | null } | null) => void
+) => {
+  await setupRoomMetadata(roomId, setCurrentUserId, setRoomName, router, setOtherUserAvatar, setOtherUserProfile);
+  
   // Load initial messages
   const { data: messagesData } = await fetchMessages(roomId);
   setMessages(messagesData);

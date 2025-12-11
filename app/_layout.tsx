@@ -1,14 +1,26 @@
+import { PresenceProvider } from "@/lib/PresenceContext";
 import { supabase } from "@/lib/supabase";
 import { Outfit_400Regular, Outfit_500Medium, Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
 import { Session } from "@supabase/supabase-js";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { UserProvider } from '../context/UserContext';
 import "./global.css";
-import { PresenceProvider } from "@/lib/PresenceContext";
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Create QueryClient with caching configuration
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 1000 * 60 * 60 * 24, // Keep unused data for 24 hours
+      staleTime: 1000 * 60 * 5, // Data stays fresh for 5 minutes
+    },
+  },
+});
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -84,24 +96,26 @@ export default function RootLayout() {
   }
 
   return (
-    <PresenceProvider>
-      <UserProvider> 
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(app)" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen 
-            name="chat/[id]" 
-            options={{
-              headerShown: false,
-              headerTitle: "Chat",
-              presentation: "card"
-            }}
-          />
-          
-        </Stack>
-      </UserProvider>
-    </PresenceProvider>
+    <QueryClientProvider client={queryClient}>
+      <PresenceProvider>
+        <UserProvider> 
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(app)" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen 
+              name="chat/[id]" 
+              options={{
+                headerShown: false,
+                headerTitle: "Chat",
+                presentation: "card"
+              }}
+            />
+            
+          </Stack>
+        </UserProvider>
+      </PresenceProvider>
+    </QueryClientProvider>
   );
 }

@@ -2,34 +2,34 @@ import BottomSheetMenu from '@/components/BottomSheetMenu';
 import TabButton from '@/components/TabButton';
 import UserAvatar from '@/components/UserAvatar';
 import UserCard from '@/components/UserCard';
+import { useSocialData } from '@/hooks/useSocialData';
+import { useSuggestions } from '@/hooks/useSuggestions';
 import {
-    acceptRequest,
-    blockUser,
-    cancelRequest,
-    declineRequest,
-    fetchFriends,
-    fetchRequests,
-    fetchSuggestions,
-    getChatRoomWithFriend,
-    removeSuggestion,
-    sendFriendRequest,
-    Suggestion,
-    unfriendUser
+  acceptRequest,
+  blockUser,
+  cancelRequest,
+  declineRequest,
+  getChatRoomWithFriend,
+  removeSuggestion,
+  sendFriendRequest,
+  Suggestion,
+  unfriendUser
 } from '@/lib/people';
 import { usePresence } from '@/lib/PresenceContext';
 import { formatLastSeen } from '@/lib/presenceUtils';
 import { supabase } from '@/lib/supabase';
-import { Friend, FriendRequest } from '@/types';
-import { useRouter } from 'expo-router';
+import { Friend } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ban, Check, Circle, Clock, Ellipsis, MessageCircle, Search, UserMinus, UserPlus, X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    RefreshControl,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,13 +37,13 @@ type SocialTab = 'suggestions' | 'requests' | 'friends';
 
 export default function PeopleScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<SocialTab>('suggestions');
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Data State
-  const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [friends, setFriends] = useState<Friend[]>([]);
+  // Use React Query hooks for data fetching with caching
+  const { requests, friends, isLoading: socialLoading, refresh: refreshSocial } = useSocialData();
+  const { suggestions: suggestionsData, isLoading: suggestionsLoading, refresh: refreshSuggestions } = useSuggestions();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
 
   // Badge tracking
@@ -59,9 +59,19 @@ export default function PeopleScreen() {
   // Get presence context at component level
   const { onlineUsers } = usePresence();
 
+  // Reset to "Discover" tab when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab('suggestions');
+    }, [])
+  );
+
+  // Sync suggestions from query to local state for UI updates
   useEffect(() => {
-    loadData();
-  }, []);
+    if (suggestionsData) {
+      setSuggestions(suggestionsData);
+    }
+  }, [suggestionsData]);
 
   useEffect(() => {
     setUnreadRequests(Math.max(0, requests.length - lastViewedRequests));
@@ -71,26 +81,9 @@ export default function PeopleScreen() {
     setNewFriends(Math.max(0, friends.length - lastViewedFriends));
   }, [friends.length, lastViewedFriends]);
 
-  async function loadData() {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const [requestsData, friendsData, suggestionsData] = await Promise.all([
-      fetchRequests(user.id),
-      fetchFriends(user.id),
-      fetchSuggestions(user.id)
-    ]);
-
-    setRequests(requestsData);
-    setFriends(friendsData);
-    setSuggestions(suggestionsData);
-    setLoading(false);
-  }
-
   async function onRefresh() {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([refreshSocial(), refreshSuggestions()]);
     setRefreshing(false);
   }
 
@@ -136,16 +129,17 @@ export default function PeopleScreen() {
 
     const success = await acceptRequest(user.id, friendshipId, senderId);
     if (success) {
-      setRequests(prev => prev.filter(r => r.requester_id !== senderId));
-      const friendsData = await fetchFriends(user.id);
-      setFriends(friendsData);
+      // Invalidate cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['my-friends'] });
     }
   }
 
   async function handleDeclineRequest(friendshipId: string) {
     const success = await declineRequest(friendshipId);
     if (success) {
-      setRequests(prev => prev.filter(r => r.id !== friendshipId));
+      // Invalidate cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
     }
   }
 
@@ -178,7 +172,8 @@ export default function PeopleScreen() {
     const success = await unfriendUser(friendshipId);
     
     if (success) {
-      setFriends(prev => prev.filter(f => f.id !== friendshipId));
+      // Invalidate cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: ['my-friends'] });
       setFriendMenuVisible(false);
       setSelectedFriend(null);
     }
@@ -191,8 +186,8 @@ export default function PeopleScreen() {
     const success = await blockUser(user.id, userId);
     
     if (success) {
-      // Remove from friends list
-      setFriends(prev => prev.filter(f => f.id !== friendshipId));
+      // Invalidate cache to trigger refetch
+      queryClient.invalidateQueries({ queryKey: ['my-friends'] });
       setFriendMenuVisible(false);
       setSelectedFriend(null);
     }
@@ -361,6 +356,8 @@ export default function PeopleScreen() {
   }
 
   function renderContent() {
+    const loading = socialLoading || suggestionsLoading;
+    
     if (loading && !refreshing) {
       return <ActivityIndicator color="#F59E0B" className="mt-10" />;
     }

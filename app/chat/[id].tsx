@@ -4,16 +4,19 @@ import ChatMedia from '@/components/ChatMedia';
 import LinkText from '@/components/LinkText';
 import MessageMenu from '@/components/MessageMenu';
 import TypingIndicator from '@/components/TypingIndicator';
+import { useRoomMessages } from '@/hooks/useChatData';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { fetchMessageById, Message } from '@/lib/chat';
-import { handleDelete, handleInputChange, handleLongPress, handleReaction, handleReply, handleSendMessage, scrollToMessage, setupRoom } from '@/lib/chatHandlers';
+import { handleDelete, handleInputChange, handleLongPress, handleReaction, handleReply, handleSendMessage, scrollToMessage, setupRoomMetadata } from '@/lib/chatHandlers';
 import { formatTimeAgo, getSeparatorText } from '@/lib/dateHelpers';
 import { pickMedia, uploadAndSendMedia } from '@/lib/mediaHandlers';
 import {
-    getUserInitial,
-    isEmojiOnly,
-    normalizeReplyData
+  getUserInitial,
+  isEmojiOnly,
+  normalizeReplyData
 } from '@/lib/messageHelpers';
 import { supabase } from '@/lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,13 +24,13 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { AlertCircle, ArrowDownFromLine, Clock, Play, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,7 +48,8 @@ function MediaPreview({ uri, type }: { uri: string; type: 'video' | 'image' }) {
         width: '100%',
         height: 300,
         backgroundColor: '#1e293b',
-        borderRadius: 16
+        borderRadius: 16,
+        overflow: 'hidden' // Fix for Android border radius
       }}
       contentFit="contain"
       nativeControls={true}
@@ -56,13 +60,34 @@ function MediaPreview({ uri, type }: { uri: string; type: 'video' | 'image' }) {
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const flatListRef = useRef<FlatList>(null);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Use React Query for cached messages and current user
+  const { data: cachedMessages, isLoading: queryLoading } = useRoomMessages(id);
+  const { data: user, isLoading: userLoading } = useCurrentUser();
+  const currentUserId = user?.id || null;
+  const messages = cachedMessages || [];
+  
+  // Create a setState-like function for React Query cache updates
+  const setMessages = (updater: (prev: Message[]) => Message[]) => {
+    queryClient.setQueryData(['messages', id], (oldData: Message[] = []) => {
+      return updater(oldData);
+    });
+  };
+  
   const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [roomName, setRoomName] = useState('Chat');
+  
+  // Initialize room data from cached messages if available
+  const cachedOtherUser = messages.length > 0 && messages[0].user_id !== currentUserId 
+    ? messages[0] 
+    : messages.find(m => m.user_id !== currentUserId);
+  
+  const [roomName, setRoomName] = useState(cachedOtherUser?.profiles?.full_name || '');
+  const [otherUserId, setOtherUserId] = useState<string | null>(cachedOtherUser?.user_id || null);
+  const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(cachedOtherUser?.profiles?.avatar_url || null);
+  const [otherUserLastSeen, setOtherUserLastSeen] = useState<string | null>(null);
+  
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [flashMessageId, setFlashMessageId] = useState<string | null>(null);
@@ -70,9 +95,6 @@ export default function ChatRoomScreen() {
   const [typingUserProfile, setTypingUserProfile] = useState<{ avatar_url?: string; full_name?: string } | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false); // Show scroll to bottom button
   const [blockStatus, setBlockStatus] = useState<'none' | 'blocked_by_me' | 'blocked_me'>('none');
-  const [otherUserId, setOtherUserId] = useState<string | null>(null);
-  const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(null); // Other user's avatar
-  const [otherUserLastSeen, setOtherUserLastSeen] = useState<string | null>(null); // Other user's last seen
   const [uploading, setUploading] = useState(false); // Media upload state
   const [uploadProgress, setUploadProgress] = useState(0); // Upload progress percentage
   const [selectedMedia, setSelectedMedia] = useState<ImagePicker.ImagePickerAsset | null>(null); // Selected media for preview
@@ -81,6 +103,18 @@ export default function ChatRoomScreen() {
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To clear the bubble
   const myTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // To throttle my sending
+
+  // Update room info from cached messages immediately
+  useEffect(() => {
+    if (messages.length > 0 && currentUserId && !roomName) {
+      const otherUserMessage = messages.find(m => m.user_id !== currentUserId);
+      if (otherUserMessage) {
+        setRoomName(otherUserMessage.profiles?.full_name || '');
+        setOtherUserId(otherUserMessage.user_id);
+        setOtherUserAvatar(otherUserMessage.profiles?.avatar_url || null);
+      }
+    }
+  }, [messages, currentUserId, roomName]);
 
   // Mark messages as read
   const markAsRead = async () => {
@@ -161,15 +195,16 @@ export default function ChatRoomScreen() {
 
 
   useEffect(() => {
-    setupRoom(
+    if (!currentUserId) return; // Wait for user to load
+    
+    // Setup room metadata only (no messages - React Query handles that)
+    setupRoomMetadata(
       id, 
-      setCurrentUserId, 
+      () => {}, // currentUserId comes from useCurrentUser hook now
       setRoomName, 
-      setMessages, 
-      setLoading, 
       router, 
       setOtherUserAvatar,
-      (profile) => {
+      (profile: any) => {
         if (profile) {
           setOtherUserId(profile.id);
           setOtherUserLastSeen(profile.last_seen || null);
@@ -178,9 +213,7 @@ export default function ChatRoomScreen() {
     );
 
     // Mark existing messages as read when entering the room
-    if (currentUserId) {
-      markAsRead();
-    }
+    markAsRead();
 
     // Subscribe to realtime messages and updates
     const channel = supabase
@@ -195,21 +228,24 @@ export default function ChatRoomScreen() {
         },
         async (payload: any) => {
           if (payload.eventType === 'INSERT') {
-            // Use the helper function that handles reply data correctly
+            // Fetch full message with joins
             const { data } = await fetchMessageById(payload.new.id);
 
             if (data) {
-              // Check if message already exists (from optimistic update)
-              setMessages((prev) => {
-                const exists = prev.some(msg => msg.id === data.id);
+              // Update React Query cache
+              queryClient.setQueryData(['messages', id], (oldData: Message[] = []) => {
+                const exists = oldData.some(msg => msg.id === data.id);
                 if (exists) {
-                  // Replace the existing message (in case it was optimistic)
-                  return prev.map(msg => msg.id === data.id ? data : msg);
+                  // Replace optimistic message with real one
+                  return oldData.map(msg => msg.id === data.id ? data : msg);
                 } else {
                   // Add new message
-                  return [data, ...prev];
+                  return [data, ...oldData];
                 }
               });
+
+              // Also invalidate chat rooms to update last message
+              queryClient.invalidateQueries({ queryKey: ['chat-rooms'] });
 
               // If a NEW message arrives and I'm looking at the screen, mark it read
               if (data.user_id !== currentUserId) {
@@ -219,17 +255,22 @@ export default function ChatRoomScreen() {
           }
 
           if (payload.eventType === 'UPDATE') {
-            // Update the specific message in our local list (including read_at updates)
-            setMessages((prev) =>
-              prev.map((msg) =>
+            // Update React Query cache for message updates (reactions, read status, etc.)
+            queryClient.setQueryData(['messages', id], (oldData: Message[] = []) => {
+              return oldData.map((msg) =>
                 msg.id === payload.new.id ? { ...msg, ...payload.new } : msg
-              )
-            );
+              );
+            });
           }
 
           if (payload.eventType === 'DELETE') {
-            // Remove deleted message from the list
-            setMessages((prev) => prev.filter((msg) => msg.id !== payload.old.id));
+            // Remove deleted message from React Query cache
+            queryClient.setQueryData(['messages', id], (oldData: Message[] = []) => {
+              return oldData.filter((msg) => msg.id !== payload.old.id);
+            });
+            
+            // Also invalidate chat rooms to update last message
+            queryClient.invalidateQueries({ queryKey: ['chat-rooms'] });
           }
         }
       )
@@ -569,11 +610,13 @@ export default function ChatRoomScreen() {
     );
   };
 
-  if (loading) {
+  // Loading guard: Wait for user ID to prevent race condition
+  // This prevents messages from appearing on wrong side before we know "who we are"
+  if (userLoading || !currentUserId) {
     return (
-      <View className="flex-1 bg-kin-charcoal justify-center items-center">
+      <SafeAreaView className="flex-1 bg-kin-charcoal justify-center items-center">
         <ActivityIndicator color="#F59E0B" size="large" />
-      </View>
+      </SafeAreaView>
     );
   }
 

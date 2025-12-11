@@ -1,20 +1,26 @@
 import BottomSheetMenu from "@/components/BottomSheetMenu";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import UserAvatar from "@/components/UserAvatar";
-import { deleteRoomForUser, fetchFriends, fetchRooms, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
+import { useChatRooms } from "@/hooks/useChatData";
+import { deleteRoomForUser, fetchFriends, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
 import { usePresence } from "@/lib/PresenceContext";
 import { supabase } from "@/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Archive, Bell, BellOff, Circle, Pin, Search, SquarePen, Trash2, UserPlus, Users } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatsListScreen() {
   const router = useRouter();
-  const [rooms, setRooms] = useState<RoomWithUser[]>([]);
+  const queryClient = useQueryClient();
+  
+  // Use React Query for cached data
+  const { data: rooms = [], isLoading } = useChatRooms();
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [friendsLoading, setFriendsLoading] = useState(true);
+  
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithUser | null>(null);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
@@ -22,26 +28,18 @@ export default function ChatsListScreen() {
   // Get presence context for online status
   const { onlineUsers } = usePresence();
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Refresh data when screen comes into focus
+  // Load friends (can be moved to a hook later)
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      loadFriends();
     }, [])
   );
 
-  async function loadData() {
-    setLoading(true);
-    const [roomsData, friendsData] = await Promise.all([
-      fetchRooms(),
-      fetchFriends()
-    ]);
-    setRooms(roomsData);
+  async function loadFriends() {
+    setFriendsLoading(true);
+    const friendsData = await fetchFriends();
     setFriends(friendsData);
-    setLoading(false);
+    setFriendsLoading(false);
   }
 
 
@@ -107,7 +105,8 @@ export default function ChatsListScreen() {
     const success = await deleteRoomForUser(selectedRoom.id, user.id);
     
     if (success) {
-      setRooms(prev => prev.filter(r => r.id !== selectedRoom.id));
+      // Invalidate cache to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['chat-rooms'] });
       setSelectedRoom(null);
     }
   }
@@ -174,9 +173,9 @@ export default function ChatsListScreen() {
       </View>
 
       {/* Online Friends Rail */}
-      {!loading && friends.length > 0 && renderFriendsRail()}
+      {!friendsLoading && friends.length > 0 && renderFriendsRail()}
 
-      {loading ? (
+      {isLoading && rooms.length === 0 ? (
         <ActivityIndicator color="#F59E0B" className="mt-10" />
       ) : (
         <FlatList
