@@ -1,8 +1,9 @@
 import BottomSheetMenu from '@/components/BottomSheetMenu';
 import { signOut } from '@/lib/auth';
 import { getProfileData, Profile } from '@/lib/profile';
+import { getProfileStats } from '@/lib/profileStats';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'expo-router';
+import { Href, useRouter } from 'expo-router';
 import {
   Edit3,
   LogOut,
@@ -22,6 +23,7 @@ export default function ProfileScreen() {
   const [memberSince, setMemberSince] = useState('');
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
+  const [friendsCount, setFriendsCount] = useState(0);
   
   // State for the Bottom Sheet Menu
   const [menuVisible, setMenuVisible] = useState(false);
@@ -44,6 +46,12 @@ export default function ProfileScreen() {
     setProfile(data.profile);
     setUserEmail(data.userEmail);
     setMemberSince(data.memberSince);
+    
+    // Load stats if we have a profile
+    if (data.profile?.id) {
+      const stats = await getProfileStats(data.profile.id);
+      setFriendsCount(stats.friendsCount);
+    }
     setLoading(false);
   }
 
@@ -61,7 +69,7 @@ export default function ProfileScreen() {
 
   const navigateTo = (path: string) => {
     setMenuVisible(false);
-    router.push(path);
+    router.push(path as Href);
   };
 
   const menuItems = [
@@ -155,7 +163,7 @@ export default function ProfileScreen() {
         <View className="flex-row justify-around mx-6 mb-8 bg-kin-midnight p-4 rounded-2xl border border-kin-slate/50">
           <StatBox number="0" label="Posts" />
           <View className="h-full w-[1px] bg-kin-slate/50" />
-          <StatBox number="0" label="Friends" />
+          <StatBox number={friendsCount.toString()} label="Friends" />
           <View className="h-full w-[1px] bg-kin-slate/50" />
           <StatBox number="0" label="Followers" />
         </View>

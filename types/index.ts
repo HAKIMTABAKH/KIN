@@ -6,9 +6,11 @@ import { TextInputProps } from "react-native";
 export interface Profile {
   id: string;
   full_name: string;
-  avatar_url?: string; // The '?' makes it optional
+  avatar_url?: string;
+  bio?: string;
+  created_at?: string;
   updated_at: string;
-  last_seen?: string; // ISO timestamp for presence feature
+  last_seen?: string;
 }
 
 export interface ProfileData {
@@ -219,4 +221,9 @@ export interface RoomWithUser {
   displayName: string;
   otherUserAvatar: string | null;
   otherUserId: string | null;
+}
+export type MediaItem = {
+  id: string;
+  media_url: string;
+  media_type: 'image' | 'video';
 }

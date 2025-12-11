@@ -1,10 +1,9 @@
-import VideoControls from '@/components/VideoControls';
+import MediaGalleryItem from '@/components/MediaGalleryItem';
+import { fetchMediaGallery, MediaGalleryItem as MediaItemType } from '@/lib/chatDetails';
 import { downloadMedia, sendMediaReply } from '@/lib/mediaViewerHelpers';
-import { supabase } from '@/lib/supabase';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { Camera, ChevronLeft, ChevronRight, Download, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -31,18 +30,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const isWeb = Platform.OS === 'web';
 
-type MediaItem = {
-  id: string;
-  media_url: string;
-  media_type: 'image' | 'video';
-  created_at: string;
-  user_id: string;
-  profiles?: {
-    full_name?: string;
-    avatar_url?: string;
-  };
-};
-
 export default function MediaViewerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -61,7 +48,7 @@ export default function MediaViewerScreen() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [mediaItems, setMediaItems] = useState<MediaItemType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadingGallery, setLoadingGallery] = useState(true);
 
@@ -69,56 +56,43 @@ export default function MediaViewerScreen() {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-
   useEffect(() => {
-    async function fetchAllMedia() {
-      if (!roomId) {
-        setMediaItems([{
-          id: messageId || '1',
-          media_url: uri,
-          media_type: type as 'image' | 'video',
-          created_at: new Date().toISOString(),
-          user_id: '',
-          profiles: { full_name: userName, avatar_url: avatar }
-        }]);
-        setLoadingGallery(false);
-        return;
-      }
-
-      const { data } = await supabase
-        .from('messages')
-        .select('id, media_url, media_type, created_at, user_id, profiles(full_name, avatar_url)')
-        .eq('room_id', roomId)
-        .not('media_url', 'is', null)
-        .order('created_at', { ascending: false });
-
-      if (data && data.length > 0) {
-        const items = data.map(item => ({
-          ...item,
-          profiles: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles
-        })) as MediaItem[];
-        setMediaItems(items);
-        const idx = items.findIndex(item => item.id === messageId || item.media_url === uri);
-        if (idx !== -1) {
-          setCurrentIndex(idx);
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index: idx, animated: false });
-          }, 100);
-        }
-      } else {
-        setMediaItems([{
-          id: messageId || '1',
-          media_url: uri,
-          media_type: type as 'image' | 'video',
-          created_at: new Date().toISOString(),
-          user_id: '',
-          profiles: { full_name: userName, avatar_url: avatar }
-        }]);
-      }
-      setLoadingGallery(false);
-    }
-    fetchAllMedia();
+    loadMedia();
   }, [roomId, messageId, uri]);
+
+  async function loadMedia() {
+    if (!roomId) {
+      setMediaItems([createSingleMediaItem()]);
+      setLoadingGallery(false);
+      return;
+    }
+
+    const items = await fetchMediaGallery(roomId);
+    if (items.length > 0) {
+      setMediaItems(items);
+      const idx = items.findIndex(item => item.id === messageId || item.media_url === uri);
+      if (idx !== -1) {
+        setCurrentIndex(idx);
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+        }, 100);
+      }
+    } else {
+      setMediaItems([createSingleMediaItem()]);
+    }
+    setLoadingGallery(false);
+  }
+
+  function createSingleMediaItem(): MediaItemType {
+    return {
+      id: messageId || '1',
+      media_url: uri,
+      media_type: type as 'image' | 'video',
+      created_at: new Date().toISOString(),
+      user_id: '',
+      profiles: { full_name: userName, avatar_url: avatar }
+    };
+  }
 
   const currentItem = mediaItems[currentIndex];
   const currentUri = currentItem?.media_url || uri;
@@ -144,6 +118,7 @@ export default function MediaViewerScreen() {
     }
   };
 
+  // Keyboard navigation for web
   useEffect(() => {
     if (!isWeb) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -155,6 +130,7 @@ export default function MediaViewerScreen() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, mediaItems.length]);
 
+  // Gesture handlers
   const singleTap = Gesture.Tap().onEnd(() => toggleFocusMode()).runOnJS(true);
   const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(() => {
     scale.value = scale.value > 1 ? withSpring(1) : withSpring(2);
@@ -212,10 +188,10 @@ export default function MediaViewerScreen() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
-  const renderMediaItem = ({ item }: { item: MediaItem }) => (
+  const renderMediaItem = ({ item }: { item: MediaItemType }) => (
     <View style={{ width, height: '100%', justifyContent: 'center', alignItems: 'center' }}>
       {item.media_type === 'video' ? (
-        <VideoItem uri={item.media_url} isActive={item.id === currentItem?.id} width={width} />
+        <MediaGalleryItem uri={item.media_url} isActive={item.id === currentItem?.id} width={width} />
       ) : (
         <Image source={{ uri: item.media_url }} style={{ width, height: '100%' }} contentFit="contain" />
       )}
@@ -229,7 +205,6 @@ export default function MediaViewerScreen() {
       </View>
     );
   }
-
 
   return (
     <GestureHandlerRootView className="flex-1">
@@ -351,35 +326,5 @@ export default function MediaViewerScreen() {
         )}
       </SafeAreaView>
     </GestureHandlerRootView>
-  );
-}
-
-function VideoItem({ uri, isActive, width }: { uri: string; isActive: boolean; width: number }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    if (isActive) p.play();
-  });
-
-  useEffect(() => {
-    if (isActive) player?.play();
-    else player?.pause();
-  }, [isActive]);
-
-  if (!player) return null;
-
-  return (
-    <View style={{ width, height: '100%' }}>
-      <VideoView
-        player={player}
-        style={{ width: '100%', height: '100%' }}
-        contentFit="contain"
-        nativeControls={isWeb}
-      />
-      {!isWeb && (
-        <VideoControls player={player} visible={true} onTogglePlay={() => {
-          player.playing ? player.pause() : player.play();
-        }} />
-      )}
-    </View>
   );
 }

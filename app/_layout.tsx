@@ -99,14 +99,7 @@ export default function RootLayout() {
               presentation: "card"
             }}
           />
-          <Stack.Screen 
-            name="(app)/media-viewer" 
-            options={{
-              presentation: "transparentModal",
-              animation: "fade",
-              headerShown: false
-            }}
-          />
+          
         </Stack>
       </UserProvider>
     </PresenceProvider>

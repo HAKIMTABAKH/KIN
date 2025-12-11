@@ -1,12 +1,12 @@
 import { getCurrentUser } from '@/lib/auth';
+import { getProfileStats } from '@/lib/profileStats';
 import { supabase } from '@/lib/supabase';
 import { UserProfile } from '@/types';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Edit3, Settings } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 
 
 export default function UserProfileScreen() {
@@ -14,8 +14,8 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [friendsCount, setFriendsCount] = useState(0);
 
   useEffect(() => {
     loadUserProfile();
@@ -25,7 +25,6 @@ export default function UserProfileScreen() {
     try {
       // Get current user
       const { user } = await getCurrentUser();
-      setCurrentUserId(user?.id || null);
       setIsOwnProfile(user?.id === id);
 
       // Load profile data
@@ -39,6 +38,11 @@ export default function UserProfileScreen() {
         console.error('Error loading profile:', error);
       } else {
         setProfile(data);
+        // Load stats
+        if (id) {
+          const stats = await getProfileStats(id);
+          setFriendsCount(stats.friendsCount);
+        }
       }
     } catch (error) {
       console.error('Error:', error);
@@ -84,7 +88,7 @@ export default function UserProfileScreen() {
           {/* Show Settings button only for own profile */}
           {isOwnProfile && (
             <TouchableOpacity 
-              onPress={() => router.push('/settings')}
+              onPress={() => router.push('/settings' as Href)}
               className="bg-kin-midnight p-2 rounded-full border border-kin-slate/50"
             >
               <Settings size={20} color="#F59E0B" />
@@ -137,7 +141,7 @@ export default function UserProfileScreen() {
           </View>
           <View className="h-full w-[1px] bg-kin-slate/50" />
           <View className="items-center">
-            <Text className="text-kin-white font-outfit-bold text-lg">0</Text>
+            <Text className="text-kin-white font-outfit-bold text-lg">{friendsCount}</Text>
             <Text className="text-kin-mist text-xs font-outfit">Friends</Text>
           </View>
           <View className="h-full w-[1px] bg-kin-slate/50" />
