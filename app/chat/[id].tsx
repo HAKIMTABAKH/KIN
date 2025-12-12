@@ -522,6 +522,7 @@ export default function ChatRoomScreen() {
                         uri={(item as any).media_url}
                         type={mediaType || 'image'}
                         onPress={() => openMediaViewer(item)}
+                        onLongPress={() => handleLongPress(item, setSelectedMessage)}
                       />
 
                       {/* Upload Progress Overlay */}

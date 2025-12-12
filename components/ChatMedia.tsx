@@ -7,9 +7,10 @@ type ChatMediaProps = {
   uri: string;
   type: 'image' | 'video';
   onPress: () => void;
+  onLongPress?: () => void;
 };
 
-export default function ChatMedia({ uri, type, onPress }: ChatMediaProps) {
+export default function ChatMedia({ uri, type, onPress, onLongPress }: ChatMediaProps) {
   // VIDEO: We load it but keep it paused to act as a thumbnail
   const player = type === 'video' ? useVideoPlayer(uri, (player) => {
     player.muted = true;
@@ -17,7 +18,12 @@ export default function ChatMedia({ uri, type, onPress }: ChatMediaProps) {
   }) : null;
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+    <TouchableOpacity 
+      onPress={onPress} 
+      onLongPress={onLongPress}
+      delayLongPress={300}
+      activeOpacity={0.9}
+    >
       <View className="relative rounded-xl overflow-hidden bg-black border border-kin-slate/20" style={{ width: 220, height: 160 }}>
         {type === 'image' ? (
           <Image

@@ -2,13 +2,14 @@ import BottomSheetMenu from "@/components/BottomSheetMenu";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import UserAvatar from "@/components/UserAvatar";
 import { useChatRooms } from "@/hooks/useChatData";
-import { deleteRoomForUser, fetchFriends, Friend, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
+import { useSocialData } from "@/hooks/useSocialData";
+import { deleteRoomForUser, getOrCreateChatWithFriend, RoomWithUser } from "@/lib/chat";
 import { usePresence } from "@/lib/PresenceContext";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Archive, Bell, BellOff, Circle, Pin, Search, SquarePen, Trash2, UserPlus, Users } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, FlatList, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,8 +19,7 @@ export default function ChatsListScreen() {
   
   // Use React Query for cached data
   const { data: rooms = [], isLoading } = useChatRooms();
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendsLoading, setFriendsLoading] = useState(true);
+  const { friends, isLoading: friendsLoading } = useSocialData();
   
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithUser | null>(null);
@@ -27,20 +27,6 @@ export default function ChatsListScreen() {
   
   // Get presence context for online status
   const { onlineUsers } = usePresence();
-
-  // Load friends (can be moved to a hook later)
-  useFocusEffect(
-    useCallback(() => {
-      loadFriends();
-    }, [])
-  );
-
-  async function loadFriends() {
-    setFriendsLoading(true);
-    const friendsData = await fetchFriends();
-    setFriends(friendsData);
-    setFriendsLoading(false);
-  }
 
 
   // --- ONLINE FRIENDS RAIL ---

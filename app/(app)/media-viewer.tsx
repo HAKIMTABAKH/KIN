@@ -1,5 +1,6 @@
 import MediaGalleryItem from '@/components/MediaGalleryItem';
-import { fetchMediaGallery, MediaGalleryItem as MediaItemType } from '@/lib/chatDetails';
+import { useMediaGallery } from '@/hooks/useMediaGallery';
+import { MediaGalleryItem as MediaItemType } from '@/lib/chatDetails';
 import { downloadMedia, sendMediaReply } from '@/lib/mediaViewerHelpers';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
@@ -48,41 +49,16 @@ export default function MediaViewerScreen() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [mediaItems, setMediaItems] = useState<MediaItemType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loadingGallery, setLoadingGallery] = useState(true);
+
+  // Use React Query for cached media gallery
+  const { data: cachedMediaItems, isLoading: loadingGallery } = useMediaGallery(roomId);
 
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-  useEffect(() => {
-    loadMedia();
-  }, [roomId, messageId, uri]);
-
-  async function loadMedia() {
-    if (!roomId) {
-      setMediaItems([createSingleMediaItem()]);
-      setLoadingGallery(false);
-      return;
-    }
-
-    const items = await fetchMediaGallery(roomId);
-    if (items.length > 0) {
-      setMediaItems(items);
-      const idx = items.findIndex(item => item.id === messageId || item.media_url === uri);
-      if (idx !== -1) {
-        setCurrentIndex(idx);
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index: idx, animated: false });
-        }, 100);
-      }
-    } else {
-      setMediaItems([createSingleMediaItem()]);
-    }
-    setLoadingGallery(false);
-  }
-
+  // Create single media item for standalone view
   function createSingleMediaItem(): MediaItemType {
     return {
       id: messageId || '1',
@@ -93,6 +69,24 @@ export default function MediaViewerScreen() {
       profiles: { full_name: userName, avatar_url: avatar }
     };
   }
+
+  // Determine media items: use cached gallery or single item
+  const mediaItems = roomId && cachedMediaItems && cachedMediaItems.length > 0 
+    ? cachedMediaItems 
+    : [createSingleMediaItem()];
+
+  // Find current index when media items load
+  useEffect(() => {
+    if (mediaItems.length > 1) {
+      const idx = mediaItems.findIndex(item => item.id === messageId || item.media_url === uri);
+      if (idx !== -1 && idx !== currentIndex) {
+        setCurrentIndex(idx);
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+        }, 100);
+      }
+    }
+  }, [mediaItems, messageId, uri]);
 
   const currentItem = mediaItems[currentIndex];
   const currentUri = currentItem?.media_url || uri;
@@ -132,27 +126,45 @@ export default function MediaViewerScreen() {
 
   // Gesture handlers
   const singleTap = Gesture.Tap().onEnd(() => toggleFocusMode()).runOnJS(true);
-  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(() => {
-    scale.value = scale.value > 1 ? withSpring(1) : withSpring(2);
-  });
+  
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      'worklet';
+      scale.value = scale.value > 1 ? withSpring(1) : withSpring(2);
+    });
+  
   const pinchGesture = Gesture.Pinch()
-    .onStart(() => { savedScale.value = scale.value; })
-    .onUpdate((e) => { scale.value = savedScale.value * e.scale; })
-    .onEnd(() => { if (scale.value < 1) scale.value = withSpring(1); });
+    .onStart(() => { 
+      'worklet';
+      savedScale.value = scale.value; 
+    })
+    .onUpdate((e) => { 
+      'worklet';
+      scale.value = savedScale.value * e.scale; 
+    })
+    .onEnd(() => { 
+      'worklet';
+      if (scale.value < 1) scale.value = withSpring(1); 
+    });
+  
   const panGesture = Gesture.Pan()
     .averageTouches(true)
     .activeOffsetY([-10, 10])
     .failOffsetX([-20, 20])
     .onUpdate((e) => {
+      'worklet';
       if (scale.value > 1.1) return;
       if (e.translationY > 0) translateY.value = e.translationY;
     })
     .onEnd((e) => {
       if (scale.value > 1.1) return;
-      if (e.translationY > 150 || e.velocityY > 1000) goBack();
-      else translateY.value = withSpring(0);
-    })
-    .runOnJS(true);
+      if (e.translationY > 150 || e.velocityY > 1000) {
+        goBack();
+      } else {
+        translateY.value = withSpring(0);
+      }
+    });
 
   const composedGestures = Gesture.Simultaneous(pinchGesture, Gesture.Exclusive(doubleTap, singleTap));
 
