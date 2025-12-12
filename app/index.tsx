@@ -85,7 +85,7 @@ export default function Index() {
   
   // Show welcome screen on first launch (only if not authenticated)
   if (!hasSeenWelcomeScreen && !isAuthenticated) {
-    return <Redirect href="/welcome" />;
+    return <Redirect href="/(app)/welcome" />;
   }
   
   // Show sign-in if not authenticated
